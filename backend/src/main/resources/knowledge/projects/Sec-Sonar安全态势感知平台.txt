@@ -1,0 +1,22 @@
+Sec-Sonar — 分布式 Web 安全态势感知与 RASP 自防御平台
+
+项目名称：Sec-Sonar
+技术栈：Spring Boot 3.2.5 + MyBatis-Plus 3.5.6 + Spring AMQP + Spring Data Elasticsearch + Python 3.10+ + pika + requests + ByteBuddy 1.14.12 + Vue 3.4 + Vite 5.2 + Tailwind CSS 3.4 + ECharts 5.5 + Pinia
+架构：四组件分布式架构（控制中心 + 扫描引擎 + RASP 探针 + 前端大屏）
+
+架构设计：
+1. sec-sonar-control（控制中心）：Spring Boot 3.2 后端，负责资产管理、扫描任务调度（RabbitMQ 投递）、RASP 日志接收（异步写入 Elasticsearch）
+2. sec-sonar-engine（扫描引擎）：Python 漏洞扫描引擎，消费 RabbitMQ 任务，ThreadPoolExecutor 10 workers 并发执行 VulnDetector 检测（布尔盲注 SQLi + OAST RCE）
+3. sec-sonar-rasp（RASP 探针）：基于 ByteBuddy 的 Java Agent，拦截 ProcessBuilder.start() 实现运行时命令执行防护，四层防御体系（全局异常保护 → 输入校验 → 命令重建 → 上下文关联分析 + 威胁检测）
+4. sec-sonar-ui（前端大屏）：赛博朋克风格安全态势感知大屏，Matrix Rain 背景动画、霓虹绿发光效果、玻璃拟态卡片
+
+RASP 四层防御体系：
+- 第 0 层：全局异常保护（任何异常 → 放行，绝不影响业务）
+- 第 1 层：输入校验（空命令检查）
+- 第 2 层：命令重建（List → 完整命令字符串）
+- 第 3 层：上下文关联分析（遍历 JVM 调用栈，检测 Web 容器特征：Tomcat/Jetty/Spring MVC 等）
+- 第 4 层：威胁检测（34 个危险命令关键词 + 15 个反弹 Shell 正则 + 9 个命令注入正则）
+
+关键设计：零外部依赖（仅 JDK 标准库）、异步上报（ScheduledExecutorService 守护线程）、Fail-Safe（探针内部异常自动放行）
+
+基础设施：MySQL（资产存储）+ RabbitMQ（任务队列）+ Elasticsearch（审计日志）

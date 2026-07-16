@@ -1,0 +1,23 @@
+ResumeAgent — 简历智能助手
+
+项目名称：ResumeAgent
+技术栈：Spring Boot 3 + Vue 3 + RAG + OpenAI 兼容 API + Vite + TypeScript
+仓库：github.com/Mental-6184/ResumeAgent
+
+项目描述：面向简历与求职场景的智能代理项目，基于 RAG（检索增强生成）架构的个人简历 AI 助手系统。可用于解析简历、生成岗位匹配建议、自动撰写求职信或优化简历内容。
+
+核心功能：
+- 简历智能问答：基于 RAG 检索相关上下文，通过自然语言对话生成准确、可追溯的回答
+- 岗位匹配分析：输入岗位描述，分析与个人技能的匹配度、优势、差距和建议
+- 项目查询：按项目名称或技术栈关键词查询项目详情
+- 技能分析：全面分析个人技术能力、技术优势、覆盖领域和改进建议
+- 面试回答生成：基于真实经历，使用 STAR 法则生成个性化面试回答
+- 安全防护：基于正则的 Prompt Injection 检测和 PII 脱敏（手机号、邮箱、身份证号）
+- SSE 流式响应：逐行流式输出，提升用户体验
+
+架构设计：
+- 后端控制器：ChatController（/api/chat）、AgentController（/api/agent）、RagController（/api/rag）、AuditController（/api/audit）
+- 服务层：ChatService（RAG 流水线编排）、KnowledgeBaseService（内存向量存储）、EmbeddingService（基于哈希的嵌入）、LlmService（OpenAI 兼容 API）、AgentService（岗位匹配分析）、SafetyService（安全检测）、PromptBuilder（提示词构建）、AuditService（审计日志）
+- 前端：ChatPanel（聊天界面）、ProjectQueryPanel、SkillAnalysisPanel、JobMatchPanel、InterviewPanel、AuditPanel
+
+数据流：用户输入 → SafetyService → KnowledgeBaseService.search() → PromptBuilder → LlmService → AuditService → 响应

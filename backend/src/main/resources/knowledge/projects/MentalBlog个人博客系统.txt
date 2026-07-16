@@ -1,0 +1,26 @@
+MentalBlog — 赛博朋克风格个人博客系统
+
+项目名称：MentalBlog
+技术栈：Spring Boot 4.0 + MyBatis-Plus + Spring Security + JWT + MySQL 8 + Redis + Vue 3 + TypeScript + Vite 8 + Element Plus + ECharts + Tailwind CSS
+架构：前后端分离（MentalBlog-H 后端 + MentalBlog-Q 前端）
+仓库：github.com/czh666810/MentalBlog
+
+功能特性：
+- 前台：文章列表（分类/标签筛选、分页）、文章详情（Markdown 渲染、TOC 目录导航、阅读进度条）、分类与标签浏览、时间轴归档、全文搜索、评论系统（嵌套回复）、点赞/收藏、阅读量统计、RSS 订阅、图库系统（上传/浏览/标签筛选/下载/评论）、深色模式
+- 后台管理：仪表盘（数据统计、趋势图表）、文章管理（CRUD、Markdown 编辑器）、分类/标签管理、评论审核、用户管理、图库管理、友链管理、系统设置、关于我管理（技能栈、项目、里程碑）、图库权限审批
+
+设计特色：
+- Indigo/Cyan 蓝白科技配色
+- Glassmorphism 毛玻璃效果
+- 完整深色模式（跟随系统 + 手动切换）
+- 响应式布局、页面过渡动画、阅读进度条 + 返回顶部
+
+数据库设计：
+- 用户与权限：user（含 image_permission 字段）、image_apply
+- 内容：article、category、tag、article_tag
+- 互动：comment、favorite、like_record
+- 站点与友链：site_config、friend_link
+- 图库：image、image_tag、image_tag_rel、image_comment
+- 关于我：skill、project、milestone
+
+权限体系：访客（仅首页）、注册用户（评论/点赞/收藏/图库需申请）、管理员（全部后台管理）

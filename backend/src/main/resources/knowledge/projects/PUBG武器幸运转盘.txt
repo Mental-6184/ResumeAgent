@@ -1,0 +1,23 @@
+PUBG 武器幸运转盘 — Web 随机抽取应用
+
+项目名称：PUBG-Weapon-Rotation
+技术栈：Spring Boot 3.1.0 + Java 17 + Spring Data JPA + MySQL 8.0 + HTML5 + CSS3 + JavaScript (ES6+) + Canvas API + Maven
+仓库：github.com/Mental-6184/PUBG-Weapon-Rotation
+已部署：https://pubg.mentalczh66.xyz
+
+项目描述：基于 Spring Boot + 原生前端的 PUBG 武器随机抽取 Web 应用。用户可以选择武器类型，通过转盘动画随机抽取 PUBG 武器，并查看抽取历史记录。
+
+功能特性：
+- 武器分类选择：按类型筛选 PUBG 武器，支持全选/清空
+- 动画转盘抽取：Canvas 绘制的可视化转盘，平滑旋转动画，精确结果计算
+- 抽取历史记录：记录每次抽取结果与时间戳，支持清除历史
+- 音效反馈：旋转音效 + 结束音效，支持开关控制
+- 响应式设计：适配桌面端与移动端
+
+数据库设计：
+- weapons 表：id、name、type、created_at
+- draw_records 表：id、weapon_name、weapon_type、draw_time
+
+API 接口：武器类型获取、按类型获取武器、随机抽取、历史记录、统计信息
+
+部署：支持本地部署和云服务器部署，提供 deploy.bat/deploy.sh/deploy-cloud.sh 脚本

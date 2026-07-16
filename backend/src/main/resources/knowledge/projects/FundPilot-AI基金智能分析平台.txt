@@ -1,0 +1,20 @@
+FundPilot-AI — 基金智能分析平台
+
+项目名称：FundPilot-AI
+技术栈：Spring Boot 3.3.5 + Spring AI 1.0.0-M5 + MyBatis-Plus 3.5.9 + Sa-Token 1.39.0 + Knife4j 4.5.0 + Hutool 5.8.32 + MySQL 8 + Redis 6 + Vue 3.5 + Vite 6 + Vue Router 4.4 + Pinia 2.2 + Element Plus 2.9 + ECharts 5.5 + Tailwind CSS 4.3 + Axios 1.7
+架构：前后端分离，暗色 FinTech 风格
+仓库：github.com/Mental-6184/FundPilot-AI
+
+核心功能：
+- 基金数据：基金搜索与筛选、基金详情（净值走势、业绩指标、持仓分布、基金经理）、多基金横向对比
+- 组合管理：投资组合 CRUD、组合分析（收益走势、资产配置、行业分布、持仓重叠度、风险评分）
+- AI 智能：ChatGPT 风格 AI 顾问对话、两阶段意图路由（关键词正则 → LLM 分类）、AI 报告自动生成
+- 设计体验：暗色主题、毛玻璃效果、流畅动画
+
+AI 多 Agent 架构（核心差异化特性）：
+- FundAdvisorAgent（编排器）：加载对话记忆 → 路由意图 → 分发任务
+- AgentRouter：两阶段意图路由（关键词正则快速路径 + LLM 分类兜底路径）
+- 4 个专家 Agent：FundAnalysisAgent（单只基金分析）、FundComparisonAgent（多基金对比）、FundRecommendationAgent（基金推荐）、PortfolioDiagnosisAgent（组合诊断）
+- 8 个 Tool Calling 函数：FundInfoTool、FundReturnTool、FundRiskTool、FundHoldingTool、FundCompareTool、PortfolioAnalyzeTool、FundRecommendTool、ReportTool
+
+数据库设计：9 张表（user、fund_manager、fund、fund_nav、fund_holding、portfolio、portfolio_item、chat_history、analysis_report），所有表使用逻辑删除

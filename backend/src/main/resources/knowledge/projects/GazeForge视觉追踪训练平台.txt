@@ -1,0 +1,20 @@
+GazeForge — 视觉注意力追踪训练平台
+
+项目名称：GazeForge
+技术栈：React 19 + TypeScript 6 + Vite 5 + Tailwind CSS 3 + React Router 7 + Zustand + Matter.js + Framer Motion + Recharts + Dexie (IndexedDB) + Web Audio API + Lucide React
+仓库：github.com/Mental-6184/GazeForge
+
+项目描述：基于多目标追踪（MOT, Multiple Object Tracking）游戏的 Web 端视觉注意力追踪训练应用，帮助用户提升注意力广度、动态追踪能力和抗干扰能力。
+
+核心功能：
+- 闯关模式：6 个章节 × 11 关（含 Boss 关），共 66 关，难度逐步递增
+- 自由训练：自定义小球数量、速度、干扰类型等参数，支持保存/加载预设方案
+- 专注力测试：4 个测试维度（追踪容量、动态稳定性、注意力广度、抗干扰能力），生成雷达图报告
+- 成就系统：22 个成就，覆盖技巧、探索、极限三大类别
+- 无障碍支持：深色/浅色主题、色盲模式（形状 + 颜色双重提示）
+
+物理引擎：使用 Matter.js 实现 2D 物理模拟，零重力环境下小球自由运动，完全弹性碰撞（restitution: 1）
+
+数据存储：使用 Dexie（IndexedDB 封装）实现本地持久化存储，数据库名 GazeForgeDB，包含 sessions、levels、achievements、testReports、presets 五张表
+
+音效系统：9 种游戏音效通过 Web Audio API 合成，无需加载外部音频文件

@@ -1,0 +1,21 @@
+图书信息管理系统 — Book Management System
+
+项目名称：Book-Management-System
+技术栈：Spring Boot 2.7.18 + MyBatis 2.3.1 + MySQL 8.0+ + Thymeleaf + HTML/CSS + Maven + JDK 17
+仓库：github.com/Mental-6184/Book-Management-System
+
+项目描述：基于 Spring Boot + MyBatis + Thymeleaf 的图书信息管理系统，实现了完整的用户管理、角色权限控制和图书 CRUD 功能。
+
+功能模块：
+- 用户模块：用户注册（用户名/密码/邮箱，默认普通用户）、用户登录（根据角色跳转不同首页）
+- 管理员功能：图书查询、图书添加（支持封面图片上传）、图书编辑、图书删除
+- 普通用户功能：单条件查询（书名/作者/ISBN）、多条件联合筛选
+
+项目特点：
+- 严格遵循 czh- 前缀命名规范（Java 类名 czh 开头驼峰、数据库表 czh_ 开头下划线分隔）
+- 登录拦截器和角色权限拦截器
+- 全局异常处理器
+- MyBatis XML 映射文件
+- 数据库初始化脚本 + 批量示例数据（20 本真实书籍）
+
+数据库：数据库名 demo5，包含用户表和图书表

@@ -68,7 +68,10 @@ public class ChatService {
         }
 
         String reply;
-        if (isRagMode && contexts.isEmpty()) {
+        if (isRagMode && isWhoAreYouQuery(request.message())) {
+            // "你是谁"类问题：直接从知识库构建回答，不调用 LLM
+            reply = buildWhoAmIAnswer(contexts);
+        } else if (isRagMode && contexts.isEmpty()) {
             // 知识库无相关内容时，直接返回 fallback，不调用 LLM（避免幻觉）
             reply = promptBuilder.buildFallbackChatAnswer(request.message(), contexts);
         } else {
@@ -153,6 +156,41 @@ public class ChatService {
     private boolean isSelfIntroductionQuery(String msg) {
         return msg.contains("介绍自己") || msg.contains("自我介绍") || msg.contains("你是谁")
                 || msg.contains("简单介绍") || msg.contains("介绍一下你") || msg.contains("做个介绍");
+    }
+
+    /** 检测是否为"你是谁"类问题 */
+    private boolean isWhoAreYouQuery(String msg) {
+        return msg.contains("你是谁") || msg.contains("你叫什么") || msg.contains("你的名字");
+    }
+
+    /** 构建"你是谁"的回答，基于知识库内容 */
+    private String buildWhoAmIAnswer(List<KnowledgeSearchItem> contexts) {
+        // 从知识库中提取姓名、学校、专业等信息
+        String name = "我";
+        String school = "";
+        String major = "";
+        String skills = "";
+
+        for (KnowledgeSearchItem item : contexts) {
+            String content = item.content();
+            if (content.contains("姓名") && content.contains("崔哲航")) {
+                name = "崔哲航";
+            }
+            if (content.contains("中北大学")) {
+                school = "中北大学";
+            }
+            if (content.contains("软件工程")) {
+                major = "软件工程";
+            }
+            if (content.contains("Java 后端") || content.contains("Spring Boot")) {
+                skills = "Java 后端开发";
+            }
+        }
+
+        if (!school.isEmpty() && !major.isEmpty()) {
+            return "我是" + name + "，" + school + major + "专业的学生。主要做" + (skills.isEmpty() ? "后端开发" : skills) + "，也涉猎 AI Agent 和安全方向。";
+        }
+        return "我是" + name + "，一个后端开发者，擅长 Java 和 Spring Boot，也做过 AI Agent 和安全相关的项目。";
     }
 
     /** 检测是否为项目列举类问题 */

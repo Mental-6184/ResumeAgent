@@ -68,9 +68,9 @@ public class ChatService {
         }
 
         String reply;
-        if (isRagMode && isWhoAreYouQuery(request.message())) {
-            // "你是谁"类问题：直接从知识库构建回答，不调用 LLM
-            reply = buildWhoAmIAnswer(contexts);
+        if (isRagMode && isSelfIntroductionQuery(request.message())) {
+            // 自我介绍类问题：直接从知识库构建回答，不调用 LLM（避免幻觉）
+            reply = buildSelfIntroductionAnswer(contexts);
         } else if (isRagMode && contexts.isEmpty()) {
             // 知识库无相关内容时，直接返回 fallback，不调用 LLM（避免幻觉）
             reply = promptBuilder.buildFallbackChatAnswer(request.message(), contexts);
@@ -152,45 +152,109 @@ public class ChatService {
         return query;
     }
 
-    /** 检测是否为自我介绍类问题 */
+    /** 检测是否为自我介绍类问题（包括"你是谁"） */
     private boolean isSelfIntroductionQuery(String msg) {
         return msg.contains("介绍自己") || msg.contains("自我介绍") || msg.contains("你是谁")
-                || msg.contains("简单介绍") || msg.contains("介绍一下你") || msg.contains("做个介绍");
+                || msg.contains("简单介绍") || msg.contains("介绍一下你") || msg.contains("做个介绍")
+                || msg.contains("你叫什么") || msg.contains("你的名字");
     }
 
-    /** 检测是否为"你是谁"类问题 */
-    private boolean isWhoAreYouQuery(String msg) {
-        return msg.contains("你是谁") || msg.contains("你叫什么") || msg.contains("你的名字");
-    }
+    /** 从知识库构建自我介绍，不调用 LLM */
+    private String buildSelfIntroductionAnswer(List<KnowledgeSearchItem> contexts) {
+        if (contexts.isEmpty()) {
+            return "这块我暂时没有太多可以展开的，知识库里还没有相关资料。";
+        }
 
-    /** 构建"你是谁"的回答，基于知识库内容 */
-    private String buildWhoAmIAnswer(List<KnowledgeSearchItem> contexts) {
-        // 从知识库中提取姓名、学校、专业等信息
-        String name = "我";
+        // 从知识库中提取关键信息
+        String name = "";
         String school = "";
         String major = "";
-        String skills = "";
+        String education = "";
+        List<String> projects = new ArrayList<>();
+        List<String> skills = new ArrayList<>();
+        String internship = "";
 
         for (KnowledgeSearchItem item : contexts) {
             String content = item.content();
-            if (content.contains("姓名") && content.contains("崔哲航")) {
-                name = "崔哲航";
+            String source = item.sourceName();
+
+            // 提取个人信息
+            if (source.contains("个人信息") || source.contains("简历")) {
+                if (content.contains("崔哲航")) name = "崔哲航";
+                if (content.contains("中北大学")) school = "中北大学";
+                if (content.contains("软件工程")) major = "软件工程";
+                if (content.contains("2023") && content.contains("2027")) education = "大四在读";
             }
-            if (content.contains("中北大学")) {
-                school = "中北大学";
+
+            // 提取项目信息（优先高含金量项目）
+            if (source.contains("FundPilot") && !projects.contains("FundPilot-AI 基金智能分析平台")) {
+                projects.add("FundPilot-AI 基金智能分析平台");
             }
-            if (content.contains("软件工程")) {
-                major = "软件工程";
+            if (source.contains("Sec-Sonar") && !projects.contains("Sec-Sonar 安全态势感知平台")) {
+                projects.add("Sec-Sonar 安全态势感知平台");
             }
-            if (content.contains("Java 后端") || content.contains("Spring Boot")) {
-                skills = "Java 后端开发";
+            if (source.contains("ResumeAgent") && !projects.contains("ResumeAgent 简历智能助手")) {
+                projects.add("ResumeAgent 简历智能助手");
+            }
+            if (source.contains("车库管理") && !projects.contains("智能车库管理系统")) {
+                projects.add("智能车库管理系统");
+            }
+
+            // 提取技能信息
+            if (content.contains("Spring Boot") && !skills.contains("Spring Boot")) {
+                skills.add("Spring Boot");
+            }
+            if (content.contains("Spring AI") && !skills.contains("Spring AI")) {
+                skills.add("Spring AI");
+            }
+            if (content.contains("RAG") && !skills.contains("RAG")) {
+                skills.add("RAG");
+            }
+            if (content.contains("Agent") && !skills.contains("Agent 架构")) {
+                skills.add("Agent 架构");
+            }
+            if (content.contains("RASP") && !skills.contains("RASP 安全防护")) {
+                skills.add("RASP 安全防护");
+            }
+
+            // 提取实习信息
+            if (source.contains("实习") || content.contains("实习")) {
+                if (content.contains("昆明逐远浪")) {
+                    internship = "在昆明逐远浪做过 Java 后端实习";
+                }
             }
         }
 
+        // 构建自我介绍
+        StringBuilder intro = new StringBuilder();
+        intro.append("您好，我叫").append(name.isEmpty() ? "我" : name).append("，");
         if (!school.isEmpty() && !major.isEmpty()) {
-            return "我是" + name + "，" + school + major + "专业的学生。主要做" + (skills.isEmpty() ? "后端开发" : skills) + "，也涉猎 AI Agent 和安全方向。";
+            intro.append("是").append(school).append(major).append("专业的");
+            if (!education.isEmpty()) {
+                intro.append(education);
+            }
+            intro.append("学生。");
         }
-        return "我是" + name + "，一个后端开发者，擅长 Java 和 Spring Boot，也做过 AI Agent 和安全相关的项目。";
+
+        // 核心技能方向
+        if (!skills.isEmpty()) {
+            intro.append("主要做 ").append(String.join("、", skills.subList(0, Math.min(3, skills.size()))));
+            intro.append("方向的开发。");
+        }
+
+        // 高含金量项目
+        if (!projects.isEmpty()) {
+            intro.append("比较有代表性的项目是 ");
+            intro.append(String.join("和", projects.subList(0, Math.min(2, projects.size()))));
+            intro.append("。");
+        }
+
+        // 实习经历
+        if (!internship.isEmpty()) {
+            intro.append(internship).append("。");
+        }
+
+        return intro.toString();
     }
 
     /** 检测是否为项目列举类问题 */

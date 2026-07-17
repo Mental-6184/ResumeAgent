@@ -52,6 +52,22 @@ public class KnowledgeBaseService {
         return new KnowledgeSearchResponse(items);
     }
 
+    /**
+     * 按 sourceName 模糊匹配查找知识块。
+     * 用于精确查找特定文件（如"个人信息"）的内容。
+     */
+    public List<KnowledgeSearchItem> searchBySourceName(String keyword) {
+        String normalizedKeyword = normalize(keyword);
+        return chunks.stream()
+                .filter(chunk -> normalize(chunk.chunk().sourceName()).contains(normalizedKeyword))
+                .map(chunk -> new KnowledgeSearchItem(
+                        chunk.chunk().sourceName(),
+                        chunk.chunk().sourceType(),
+                        chunk.chunk().content(),
+                        1.0))
+                .toList();
+    }
+
     private boolean isListingQuery(String normalizedQuery) {
         return (normalizedQuery.contains("项目") || normalizedQuery.contains("经历") || normalizedQuery.contains("作品"))
                 && (normalizedQuery.contains("哪些") || normalizedQuery.contains("什么") || normalizedQuery.contains("列举")

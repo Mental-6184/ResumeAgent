@@ -69,8 +69,11 @@ public class ChatService {
 
         String reply;
         if (isRagMode && isSelfIntroductionQuery(request.message())) {
-            // 自我介绍类问题：直接从知识库构建回答，不调用 LLM（避免幻觉）
-            reply = buildSelfIntroductionAnswer(contexts);
+            // 自我介绍类问题：优先精确查找个人信息，再补充搜索结果
+            List<KnowledgeSearchItem> personalInfo = knowledgeBaseService.searchBySourceName("个人信息");
+            List<KnowledgeSearchItem> allContexts = new ArrayList<>(personalInfo);
+            allContexts.addAll(contexts);
+            reply = buildSelfIntroductionAnswer(allContexts);
         } else if (isRagMode && contexts.isEmpty()) {
             // 知识库无相关内容时，直接返回 fallback，不调用 LLM（避免幻觉）
             reply = promptBuilder.buildFallbackChatAnswer(request.message(), contexts);
@@ -141,7 +144,7 @@ public class ChatService {
 
         // 自我介绍类问题：扩展搜索词以获取完整简历信息
         if (isSelfIntroductionQuery(currentMessage)) {
-            return query + " 个人信息 简历 教育背景 技能 项目经历 实习";
+            return query + " 崔哲航 个人信息 中北大学 软件工程 简历 教育背景 技能 项目经历 实习";
         }
 
         // 项目列举类问题：扩展搜索词

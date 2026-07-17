@@ -56,7 +56,7 @@ public class ChatService {
 
         if (isRagMode) {
             // RAG 模式：检索知识库，动态构建系统提示词
-            String searchQuery = buildContextualQuery(request.message(), history);
+            String searchQuery = buildEnhancedQuery(request.message(), history);
             contexts = knowledgeBaseService.search(searchQuery).items();
             systemPrompt = promptBuilder.buildDynamicSystemPrompt(contexts);
             userPrompt = promptBuilder.buildChatUserPrompt(request.message(), history, contexts);
@@ -128,6 +128,37 @@ public class ChatService {
     private void appendMessage(String conversationId, String role, String content) {
         conversationStore.computeIfAbsent(conversationId, key -> new CopyOnWriteArrayList<>())
                 .add(new ConversationMessage(role, content));
+    }
+
+    /**
+     * 构建增强的搜索查询，处理特殊场景（自我介绍、项目列举等）。
+     */
+    private String buildEnhancedQuery(String currentMessage, List<ConversationMessage> history) {
+        String query = buildContextualQuery(currentMessage, history);
+
+        // 自我介绍类问题：扩展搜索词以获取完整简历信息
+        if (isSelfIntroductionQuery(currentMessage)) {
+            return query + " 个人信息 简历 教育背景 技能 项目经历 实习";
+        }
+
+        // 项目列举类问题：扩展搜索词
+        if (isProjectListingQuery(currentMessage)) {
+            return query + " 项目 FundPilot Sec-Sonar 车库管理";
+        }
+
+        return query;
+    }
+
+    /** 检测是否为自我介绍类问题 */
+    private boolean isSelfIntroductionQuery(String msg) {
+        return msg.contains("介绍自己") || msg.contains("自我介绍") || msg.contains("你是谁")
+                || msg.contains("简单介绍") || msg.contains("介绍一下你") || msg.contains("做个介绍");
+    }
+
+    /** 检测是否为项目列举类问题 */
+    private boolean isProjectListingQuery(String msg) {
+        return (msg.contains("项目") || msg.contains("经历"))
+                && (msg.contains("哪些") || msg.contains("什么") || msg.contains("做过") || msg.contains("有"));
     }
 
     /**

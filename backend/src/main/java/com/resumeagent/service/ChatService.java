@@ -8,8 +8,10 @@ import com.resumeagent.model.ConversationMessage;
 import com.resumeagent.model.SafetyVerdict;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -25,6 +27,16 @@ public class ChatService {
     private final LlmService llmService;
     private final AuditService auditService;
     private final Map<String, List<ConversationMessage>> conversationStore = new ConcurrentHashMap<>();
+
+    /** 问题类型枚举，用于驱动不同的检索策略和回答策略 */
+    private enum QuestionType {
+        SELF_INTRODUCTION,  // 自我介绍："介绍一下你自己"、"你是谁"
+        PROJECT,            // 项目深挖："说说你的项目"、"项目中遇到的难点"
+        TECHNICAL,          // 技术问题："你擅长什么技术"、"说说 Spring Boot"
+        BEHAVIORAL,         // 行为问题："遇到过什么困难"、"如何团队协作"
+        GREETING,           // 打招呼："你好"、"hello"
+        GENERAL             // 通用问题
+    }
 
     public ChatService(KnowledgeBaseService knowledgeBaseService,
                        SafetyService safetyService,
@@ -55,9 +67,9 @@ public class ChatService {
         String userPrompt;
 
         if (isRagMode) {
-            // RAG 模式：检索知识库，动态构建系统提示词
-            String searchQuery = buildEnhancedQuery(request.message(), history);
-            contexts = knowledgeBaseService.search(searchQuery).items();
+            // RAG 模式：根据问题类型进行多轮检索，构建上下文
+            QuestionType type = classifyQuestion(request.message());
+            contexts = retrieveContext(request.message(), history, type);
             systemPrompt = promptBuilder.buildDynamicSystemPrompt(contexts);
             userPrompt = promptBuilder.buildChatUserPrompt(request.message(), history, contexts);
         } else {
@@ -68,13 +80,7 @@ public class ChatService {
         }
 
         String reply;
-        if (isRagMode && isSelfIntroductionQuery(request.message())) {
-            // 自我介绍类问题：优先精确查找个人信息，再补充搜索结果
-            List<KnowledgeSearchItem> personalInfo = knowledgeBaseService.searchBySourceName("个人信息");
-            List<KnowledgeSearchItem> allContexts = new ArrayList<>(personalInfo);
-            allContexts.addAll(contexts);
-            reply = buildSelfIntroductionAnswer(allContexts);
-        } else if (isRagMode && contexts.isEmpty()) {
+        if (isRagMode && contexts.isEmpty()) {
             // 知识库无相关内容时，直接返回 fallback，不调用 LLM（避免幻觉）
             reply = promptBuilder.buildFallbackChatAnswer(request.message(), contexts);
         } else {
@@ -137,112 +143,106 @@ public class ChatService {
     }
 
     /**
-     * 构建增强的搜索查询，处理特殊场景（自我介绍、项目列举等）。
+     * 根据问题类型进行多轮 RAG 检索，合并去重后返回。
+     * 不同类型的问题使用不同的搜索策略，提高召回率和相关性。
      */
-    private String buildEnhancedQuery(String currentMessage, List<ConversationMessage> history) {
-        String query = buildContextualQuery(currentMessage, history);
+    private List<KnowledgeSearchItem> retrieveContext(String message, List<ConversationMessage> history, QuestionType type) {
+        List<KnowledgeSearchItem> allItems = new ArrayList<>();
+        String contextualQuery = buildContextualQuery(message, history);
 
-        // 自我介绍类问题：扩展搜索词以获取完整简历信息
-        if (isSelfIntroductionQuery(currentMessage)) {
-            return query + " 崔哲航 个人信息 中北大学 软件工程 简历 教育背景 技能 项目经历 实习";
+        switch (type) {
+            case SELF_INTRODUCTION -> {
+                // 自我介绍：先精确查找个人信息，再广泛搜索简历相关内容
+                allItems.addAll(knowledgeBaseService.searchBySourceName("个人信息"));
+                allItems.addAll(knowledgeBaseService.search(contextualQuery + " 简历 教育背景 技能 实习经历").items());
+                allItems.addAll(knowledgeBaseService.search("项目 技术栈 亮点 成果").items());
+            }
+            case PROJECT -> {
+                // 项目类：搜索项目详情、技术栈、实现难点
+                allItems.addAll(knowledgeBaseService.search(contextualQuery + " 项目 技术栈 实现").items());
+                allItems.addAll(knowledgeBaseService.search(contextualQuery + " 难点 解决方案 优化").items());
+            }
+            case TECHNICAL -> {
+                // 技术类：搜索技术关键词 + 项目中的实际应用
+                allItems.addAll(knowledgeBaseService.search(contextualQuery + " 项目 应用 实践").items());
+                allItems.addAll(knowledgeBaseService.search(contextualQuery + " 技术栈 架构").items());
+            }
+            case BEHAVIORAL -> {
+                // 行为类：搜索项目经历、挑战、解决方案
+                allItems.addAll(knowledgeBaseService.search(contextualQuery + " 项目 挑战 解决").items());
+                allItems.addAll(knowledgeBaseService.search(contextualQuery + " 团队 协作 成果").items());
+            }
+            default -> {
+                // 通用问题：标准搜索
+                allItems.addAll(knowledgeBaseService.search(contextualQuery).items());
+            }
         }
 
-        // 项目列举类问题：扩展搜索词
-        if (isProjectListingQuery(currentMessage)) {
-            return query + " 项目 FundPilot Sec-Sonar 车库管理";
-        }
-
-        return query;
+        // 去重：按 content 去重，保留顺序
+        return deduplicateItems(allItems);
     }
 
-    /** 检测是否为自我介绍类问题（包括"你是谁"） */
-    private boolean isSelfIntroductionQuery(String msg) {
-        return msg.contains("介绍自己") || msg.contains("自我介绍") || msg.contains("你是谁")
+    /**
+     * 问题类型分类。
+     * 基于关键词匹配识别问题类型，用于驱动不同的检索和回答策略。
+     */
+    private QuestionType classifyQuestion(String msg) {
+        String lower = msg.toLowerCase();
+
+        // 自我介绍
+        if (msg.contains("介绍自己") || msg.contains("自我介绍") || msg.contains("你是谁")
                 || msg.contains("简单介绍") || msg.contains("介绍一下你") || msg.contains("做个介绍")
-                || msg.contains("你叫什么") || msg.contains("你的名字");
+                || msg.contains("你叫什么") || msg.contains("你的名字") || msg.contains("关于你")) {
+            return QuestionType.SELF_INTRODUCTION;
+        }
+
+        // 打招呼
+        if (msg.matches("^(你好|hello|hi|hey|嗨|您好|hi there).{0,5}$")
+                || msg.length() <= 6 && (msg.contains("你好") || msg.toLowerCase().contains("hello"))) {
+            return QuestionType.GREETING;
+        }
+
+        // 项目类
+        if (msg.contains("项目") || msg.contains("作品") || msg.contains("系统")
+                || msg.contains("平台") || msg.contains("应用") || msg.contains("开发过")) {
+            return QuestionType.PROJECT;
+        }
+
+        // 技术类
+        if (msg.contains("技术") || msg.contains("栈") || msg.contains("框架")
+                || msg.contains("擅长") || msg.contains("熟悉") || msg.contains("了解")
+                || msg.contains("spring") || msg.contains("java") || msg.contains("vue")
+                || msg.contains("数据库") || msg.contains("docker") || msg.contains("微服务")
+                || msg.contains("算法") || msg.contains("设计模式") || msg.contains("架构")) {
+            return QuestionType.TECHNICAL;
+        }
+
+        // 行为类
+        if (msg.contains("困难") || msg.contains("挑战") || msg.contains("难点")
+                || msg.contains("团队") || msg.contains("协作") || msg.contains("沟通")
+                || msg.contains("失败") || msg.contains("成功") || msg.contains("收获")
+                || msg.contains("成长") || msg.contains("印象最深") || msg.contains("最自豪")) {
+            return QuestionType.BEHAVIORAL;
+        }
+
+        return QuestionType.GENERAL;
     }
 
-    /** 从知识库构建自我介绍，不调用 LLM */
-    private String buildSelfIntroductionAnswer(List<KnowledgeSearchItem> contexts) {
-        if (contexts.isEmpty()) {
-            return "这块我暂时没有太多可以展开的，知识库里还没有相关资料。";
-        }
-
-        // 合并所有上下文内容
-        StringBuilder allContent = new StringBuilder();
-        for (KnowledgeSearchItem item : contexts) {
-            allContent.append(item.content()).append(" ");
-        }
-        String content = allContent.toString();
-
-        // 从合并内容中提取关键信息
-        String name = content.contains("崔哲航") ? "崔哲航" : "";
-        String school = content.contains("中北大学") ? "中北大学" : "";
-        String major = content.contains("软件工程") ? "软件工程" : "";
-        boolean isStudent = content.contains("2023") && content.contains("2027");
-
-        // 提取项目（优先高含金量）
-        List<String> projects = new ArrayList<>();
-        if (content.contains("FundPilot") || content.contains("基金")) {
-            projects.add("FundPilot-AI 基金智能分析平台");
-        }
-        if (content.contains("Sec-Sonar") || content.contains("安全态势")) {
-            projects.add("Sec-Sonar 安全态势感知平台");
-        }
-        if (projects.isEmpty()) {
-            if (content.contains("ResumeAgent") || content.contains("简历智能")) {
-                projects.add("ResumeAgent 简历智能助手");
-            }
-            if (content.contains("车库管理")) {
-                projects.add("智能车库管理系统");
+    /**
+     * 知识库结果去重，按 content 文本去重，保留首次出现的顺序。
+     */
+    private List<KnowledgeSearchItem> deduplicateItems(List<KnowledgeSearchItem> items) {
+        Set<String> seen = new LinkedHashSet<>();
+        List<KnowledgeSearchItem> result = new ArrayList<>();
+        for (KnowledgeSearchItem item : items) {
+            // 用 content 前 100 字符作为去重 key，避免完全相同的内容重复
+            String key = item.content().length() > 100 ? item.content().substring(0, 100) : item.content();
+            if (seen.add(key)) {
+                result.add(item);
             }
         }
-
-        // 提取技能
-        List<String> skills = new ArrayList<>();
-        if (content.contains("Spring Boot")) skills.add("Spring Boot");
-        if (content.contains("Spring AI")) skills.add("Spring AI");
-        if (content.contains("RAG")) skills.add("RAG");
-        if (content.contains("Agent")) skills.add("Agent 架构");
-        if (content.contains("RASP") || content.contains("安全防护")) skills.add("安全防护");
-
-        // 提取实习
-        String internship = content.contains("昆明逐远浪") ? "在昆明逐远浪做过 Java 后端实习" : "";
-
-        // 构建自我介绍
-        StringBuilder intro = new StringBuilder();
-        intro.append("您好，");
-        if (!name.isEmpty()) {
-            intro.append("我叫").append(name).append("，");
-        }
-        if (!school.isEmpty() && !major.isEmpty()) {
-            intro.append("是").append(school).append(major).append("专业的");
-            if (isStudent) intro.append("大四在读");
-            intro.append("学生。");
-        }
-
-        if (!skills.isEmpty()) {
-            intro.append("主要做 ").append(String.join("、", skills.subList(0, Math.min(3, skills.size()))));
-            intro.append("方向的开发。");
-        }
-
-        if (!projects.isEmpty()) {
-            intro.append("比较有代表性的项目是 ");
-            intro.append(String.join("和", projects.subList(0, Math.min(2, projects.size()))));
-            intro.append("。");
-        }
-
-        if (!internship.isEmpty()) {
-            intro.append(internship).append("。");
-        }
-
-        return intro.toString();
-    }
-
-    /** 检测是否为项目列举类问题 */
-    private boolean isProjectListingQuery(String msg) {
-        return (msg.contains("项目") || msg.contains("经历"))
-                && (msg.contains("哪些") || msg.contains("什么") || msg.contains("做过") || msg.contains("有"));
+        // 限制总量，避免上下文过长
+        return result.size() > 10 ? result.subList(0, 10) : result;
     }
 
     /**

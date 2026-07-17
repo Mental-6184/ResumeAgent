@@ -51,7 +51,7 @@ class ResumeAgentSmokeTest {
                 "项目采用 Spring Boot、Vue3、Redis 和审计日志机制。"
         ));
 
-        var response = chatService.chat(new ChatRequest("chat-test-1", "介绍一下你的网络安全项目"));
+        var response = chatService.chat(new ChatRequest("chat-test-1", "介绍一下你的网络安全项目", "rag"));
 
         assertThat(response.citations()).isNotEmpty();
         assertThat(response.reply()).contains("网络安全项目");
@@ -69,8 +69,7 @@ class ResumeAgentSmokeTest {
     void shouldAnalyzeJobMatch() {
         var response = agentService.analyze(new JobAnalyzeRequest(
                 "Java 安全开发工程师",
-                "负责 Java 后端、安全研发、漏洞修复和日志审计。",
-                "熟悉 Java、Spring Boot、Vue3、RAG 和 Agent，具备安全意识。"
+                "负责 Java 后端、安全研发、漏洞修复和日志审计。要求熟悉 Java、Spring Boot、Vue3、RAG 和 Agent，具备安全意识。"
         ));
 
         assertThat(response.matchScore()).isGreaterThan(0);

@@ -48,24 +48,45 @@ public class ChatService {
         }
 
         List<ConversationMessage> history = historyMessages(request.conversationId());
-        // 用对话历史扩展检索 query，解决"这个项目"等指代问题
-        String searchQuery = buildContextualQuery(request.message(), history);
-        List<KnowledgeSearchItem> contexts = knowledgeBaseService.search(searchQuery).items();
-        String systemPrompt = promptBuilder.buildChatSystemPrompt();
-        String userPrompt = promptBuilder.buildChatUserPrompt(request.message(), history, contexts);
+        final boolean isRagMode = !"llm".equals(request.mode());
 
-        // 将对话历史转为 messages 格式传给 LLM
-        List<Map<String, String>> historyMessages = history.stream()
-                .map(m -> Map.of("role", m.role(), "content", m.content()))
-                .toList();
+        final List<KnowledgeSearchItem> contexts;
+        String systemPrompt;
+        String userPrompt;
 
-        String reply = llmService.generate(systemPrompt, userPrompt, historyMessages)
-                .orElseGet(() -> promptBuilder.buildFallbackChatAnswer(request.message(), contexts));
+        if (isRagMode) {
+            // RAG 模式：检索知识库，动态构建系统提示词
+            String searchQuery = buildContextualQuery(request.message(), history);
+            contexts = knowledgeBaseService.search(searchQuery).items();
+            systemPrompt = promptBuilder.buildDynamicSystemPrompt(contexts);
+            userPrompt = promptBuilder.buildChatUserPrompt(request.message(), history, contexts);
+        } else {
+            // 纯 LLM 模式：直接对话，不检索知识库
+            contexts = List.of();
+            systemPrompt = promptBuilder.buildLlmSystemPrompt();
+            userPrompt = request.message();
+        }
+
+        String reply;
+        if (isRagMode && contexts.isEmpty()) {
+            // 知识库无相关内容时，直接返回 fallback，不调用 LLM（避免幻觉）
+            reply = promptBuilder.buildFallbackChatAnswer(request.message(), contexts);
+        } else {
+            // 将对话历史转为 messages 格式传给 LLM
+            List<Map<String, String>> historyMessages = history.stream()
+                    .map(m -> Map.of("role", m.role(), "content", m.content()))
+                    .toList();
+
+            reply = llmService.generate(systemPrompt, userPrompt, historyMessages)
+                    .orElseGet(() -> isRagMode
+                            ? promptBuilder.buildFallbackChatAnswer(request.message(), contexts)
+                            : "抱歉，LLM 服务未配置。请在 application.yml 中配置 resumeagent.openai 相关参数。");
+        }
 
         appendMessage(request.conversationId(), "user", verdict.sanitizedText());
         appendMessage(request.conversationId(), "assistant", reply);
-        auditService.record("chat", request.conversationId(), verdict.sanitizedText(), reply, verdict.reason());
-        return new ChatResponse(request.conversationId(), reply, buildCitations(contexts));
+        auditService.record(isRagMode ? "chat" : "chat-llm", request.conversationId(), verdict.sanitizedText(), reply, verdict.reason());
+        return new ChatResponse(request.conversationId(), reply, isRagMode ? buildCitations(contexts) : List.of());
     }
 
     public SseEmitter stream(ChatRequest request) {
@@ -111,7 +132,7 @@ public class ChatService {
 
     /**
      * 基于对话历史扩展检索 query，解决"这个项目"、"它"等指代词导致的检索不精准问题。
-     * 从最近的对话中提取项目名和关键词，拼接到当前 query 中。
+     * 当检测到指代词时，将最近对话中的关键信息拼接到检索 query 中。
      */
     private String buildContextualQuery(String currentMessage, List<ConversationMessage> history) {
         if (history.isEmpty()) {
@@ -130,31 +151,27 @@ public class ChatService {
             return currentMessage;
         }
 
-        // 从最近 4 轮对话中提取关键词
+        // 从最近几轮对话中提取关键词，帮助搜索引擎定位上下文
         int start = Math.max(0, history.size() - 4);
-        List<String> recentTexts = new ArrayList<>();
+        List<String> keywords = new ArrayList<>();
         for (int i = start; i < history.size(); i++) {
-            recentTexts.add(history.get(i).content());
-        }
-        String recentContext = String.join(" ", recentTexts);
-
-        // 提取项目名关键词
-        String[] projectNames = {"FundPilot", "MentalBlog", "Sec-Sonar", "SecSonar", "GazeForge",
-                "ResumeAgent", "车库管理", "3D粒子", "Particle", "ShotNote", "PocketLedger",
-                "PUBG", "图书管理", "博客", "基金", "安全态势", "截图标注", "记账", "粒子系统"};
-        List<String> foundProjects = new ArrayList<>();
-        for (String name : projectNames) {
-            if (recentContext.contains(name)) {
-                foundProjects.add(name);
+            String content = history.get(i).content();
+            // 提取英文单词和中文词汇作为关键词
+            for (String word : content.split("[，。？！、；：\\s]+")) {
+                String trimmed = word.trim();
+                if (trimmed.length() >= 2 && trimmed.length() <= 20) {
+                    keywords.add(trimmed);
+                }
             }
         }
 
-        if (foundProjects.isEmpty()) {
+        if (keywords.isEmpty()) {
             return currentMessage;
         }
 
-        // 拼接：当前消息 + 提取到的项目名
-        return currentMessage + " " + String.join(" ", foundProjects);
+        // 取最近的关键词拼接到 query 中（限制数量避免噪音）
+        List<String> recentKeywords = keywords.subList(Math.max(0, keywords.size() - 8), keywords.size());
+        return currentMessage + " " + String.join(" ", recentKeywords);
     }
 
     private List<String> splitIntoChunks(String reply) {

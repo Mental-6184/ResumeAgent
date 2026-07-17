@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-本文件为 Claude Code (claude.ai/code) 在本仓库中工作时提供指导。
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## 项目概述
 
@@ -68,8 +68,14 @@ cd frontend && npm install && npm run dev
 # 运行后端服务器 (端口 8080)
 cd backend && mvn spring-boot:run
 
-# 运行测试
+# 运行所有测试
 cd backend && mvn test
+
+# 运行单个测试类
+cd backend && mvn test -Dtest=ResumeAgentSmokeTest
+
+# 运行单个测试方法
+cd backend && mvn test -Dtest=ResumeAgentSmokeTest#shouldSearchRelevantKnowledge
 
 # 构建 JAR
 cd backend && mvn package
@@ -103,15 +109,16 @@ cd frontend && npm run preview
   - `/api/agent/interview-answer` - 面试回答生成
 - `RagController` (`/api/rag`) - 知识库导入和搜索
 - `AuditController` (`/api/audit`) - 安全日志审计
+- `SystemController` (`/api/system`) - 系统配置查询（LLM 配置信息）
 
 **服务** - 核心业务逻辑：
-- `ChatService` - 编排 RAG 流水线：安全检查 → 知识检索 → 提示词构建 → LLM 生成 → 审计日志。使用 `conversationId` 维护内存中的对话历史。
+- `ChatService` - 编排 RAG 流水线：安全检查 → 知识检索 → 动态提示词构建 → LLM 生成 → 审计日志。使用 `conversationId` 维护内存中的对话历史。
 - `KnowledgeBaseService` - 内存向量存储，支持文本分块（260 字符上限，40 字符重叠）。评分结合 `EmbeddingService` 的余弦相似度和词汇增强。
 - `EmbeddingService` - 基于哈希的嵌入（128 维）。非真实嵌入模型，专为本地开发设计，无需外部服务。支持 CJK 和 ASCII 分词及 n-gram。
-- `LlmService` - OpenAI 兼容 API 客户端。未配置时返回 `Optional.empty()`，导致回退到 `PromptBuilder` 的模板响应。
-- `AgentService` - 基于关键词的岗位匹配分析。提取技术关键词并计算重叠分数。支持 LLM 语义分析，不可用时降级为规则匹配。
+- `LlmService` - OpenAI 兼容 API 客户端。未配置时返回 `Optional.empty()`，导致回退到基于检索的模板响应。`isAvailable()` 方法暴露配置状态。
+- `AgentService` - 完全基于 RAG 知识库的动态分析引擎。从知识库检索项目资料，自动提取技术栈、项目亮点，生成岗位匹配、技能分析、面试回答。无硬编码数据。
 - `SafetyService` - 基于正则的 Prompt Injection 检测（中英文模式）和 PII 脱敏（手机号、邮箱、身份证号）。
-- `PromptBuilder` - 为 LLM 构建系统/用户提示词，包含对话历史和检索到的上下文。
+- `PromptBuilder` - 为 LLM 构建动态系统提示词。系统提示词只含角色设定和回答风格指引，RAG 检索结果动态注入作为 LLM 背景知识。
 - `AuditService` - 内存审计日志，记录所有聊天/Agent 交互。
 
 **配置** - `ResumeAgentProperties`（`application.yml` 中 `resumeagent.*` 前缀）：
@@ -122,7 +129,7 @@ cd frontend && npm run preview
 ### 前端结构 (`frontend/src/`)
 
 **页面**（`App.vue` 中的标签页）：
-- `ChatPanel.vue` - 聊天界面，支持普通和 SSE 流式模式
+- `ChatPanel.vue` - 模拟面试界面，以候选人身份回答面试官问题，支持普通和 SSE 流式模式
 - `ProjectQueryPanel.vue` - 项目查询界面
 - `SkillAnalysisPanel.vue` - 技能分析界面
 - `JobMatchPanel.vue` - 岗位匹配分析表单
@@ -138,7 +145,7 @@ cd frontend && npm run preview
 ```
 用户输入 → SafetyService (注入/PII 检查)
         → KnowledgeBaseService.search() (向量 + 词汇检索)
-        → PromptBuilder (系统提示词 + 历史 + 上下文)
+        → PromptBuilder (动态系统提示词 + RAG 上下文 + 历史)
         → LlmService (OpenAI 兼容 API，或回退)
         → AuditService (记录交互)
         → 响应 (含引用)
@@ -146,6 +153,7 @@ cd frontend && npm run preview
 
 ## 关键设计决策
 
+- **零硬编码**：所有个人数据均从知识库动态检索，系统提示词和 Agent 分析均基于 RAG 结果构建，代码中不包含任何个人项目或经历的硬编码数据。
 - **内存存储**：知识库、对话和审计日志存储在内存中。开发无需数据库。
 - **优雅降级**：LLM 未配置时，系统回退到基于检索知识块的模板响应。
 - **SSE 流式**：`/api/chat/stream` 端点使用 `SseEmitter` 逐行流式响应，80ms 延迟。

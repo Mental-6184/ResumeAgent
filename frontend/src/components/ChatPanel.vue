@@ -6,7 +6,29 @@
       <div v-if="messages.length === 0" class="chat-hero" :class="{ 'visible': heroReady }">
         <div class="hero-icon">✦</div>
         <h1 class="hero-title">ResumeAgent</h1>
-        <p class="hero-subtitle">有什么我可以帮你的？</p>
+        <p class="hero-subtitle">模拟面试 · 我就是你，替你回答每一个问题</p>
+
+        <!-- 模式切换 -->
+        <div class="mode-switcher">
+          <button
+            class="mode-btn"
+            :class="{ active: chatMode === 'rag' }"
+            @click="switchMode('rag')"
+          >
+            <span class="mode-icon">◈</span>
+            <span class="mode-label">模拟面试</span>
+            <span class="mode-desc">替你回答面试问题</span>
+          </button>
+          <button
+            class="mode-btn"
+            :class="{ active: chatMode === 'llm' }"
+            @click="switchMode('llm')"
+          >
+            <span class="mode-icon">◆</span>
+            <span class="mode-label">通用对话</span>
+            <span class="mode-desc">纯大模型问答</span>
+          </button>
+        </div>
 
         <!-- 快速提问 -->
         <div class="hero-suggestions">
@@ -21,6 +43,13 @@
         </div>
       </div>
 
+      <!-- 模式指示器 - 有消息时显示 -->
+      <div v-if="messages.length > 0" class="mode-indicator">
+        <span class="mode-badge" :class="chatMode">
+          {{ chatMode === 'rag' ? '◈ 模拟面试' : '◆ 通用对话' }}
+        </span>
+      </div>
+
       <!-- 消息列表 -->
       <div v-for="msg in messages" :key="msg.id" class="chat-msg" :class="msg.role">
         <span class="prompt-char">{{ msg.role === 'user' ? '>' : '✦' }}</span>
@@ -28,8 +57,8 @@
           <span v-html="formatContent(msg.content)"></span>
           <span v-if="msg.role === 'assistant' && streaming && msg.id === streamingId" class="chat-cursor"></span>
 
-          <!-- 引用 -->
-          <div v-if="msg.citations.length > 0" class="chat-citations">
+          <!-- 引用 (仅 RAG 模式显示) -->
+          <div v-if="chatMode === 'rag' && msg.citations.length > 0" class="chat-citations">
             <div class="cite-label">── references ──</div>
             <div v-for="(cite, i) in msg.citations" :key="i" class="chat-citation-item">
               [{{ i + 1 }}] {{ cite }}
@@ -53,7 +82,7 @@
           ref="inputRef"
           class="chat-input"
           v-model="question"
-          placeholder="输入问题... (Enter 发送, Shift+Enter 换行)"
+          :placeholder="chatMode === 'rag' ? '作为面试官，向我提问...' : '输入任何问题...'"
           @keydown="handleKeydown"
           rows="1"
           @input="autoResize"
@@ -78,13 +107,18 @@
         <span class="hint-item">
           <span class="hint-key">Shift+Enter</span> 换行
         </span>
+        <span class="hint-divider">·</span>
+        <span class="hint-item mode-hint" @click="toggleMode">
+          <span class="hint-key">{{ chatMode === 'rag' ? '通用对话' : '模拟面试' }}</span>
+          切换模式
+        </span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { postChat } from '../api/chat'
 
 interface RenderMessage {
@@ -94,6 +128,8 @@ interface RenderMessage {
   citations: string[]
 }
 
+type ChatMode = 'rag' | 'llm'
+
 const props = defineProps<{
   initialQuestion?: string
 }>()
@@ -102,13 +138,21 @@ const emit = defineEmits<{
   (e: 'question-sent'): void
 }>()
 
-const suggestions = [
-  '介绍一下你的技术栈',
-  '你有哪些项目经历',
-  '你的优势是什么',
-  '介绍一下你的实习经历'
+const ragSuggestions = [
+  '请介绍一下你自己',
+  '你做过哪些项目？',
+  '你最擅长的技术是什么？',
+  '你在项目中遇到过什么难点？'
 ]
 
+const llmSuggestions = [
+  '帮我写一段快速排序代码',
+  '解释一下微服务架构的优缺点',
+  '用Python实现一个简单的爬虫',
+  '什么是RAG技术？'
+]
+
+const chatMode = ref<ChatMode>('rag')
 const conversationId = ref(`conv-${Date.now()}`)
 const question = ref('')
 const loading = ref(false)
@@ -119,6 +163,18 @@ const messagesRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const heroReady = ref(false)
 let eventSource: EventSource | null = null
+
+const suggestions = computed(() => chatMode.value === 'rag' ? ragSuggestions : llmSuggestions)
+
+function switchMode(mode: ChatMode) {
+  chatMode.value = mode
+  messages.value = []
+  conversationId.value = `conv-${Date.now()}`
+}
+
+function toggleMode() {
+  switchMode(chatMode.value === 'rag' ? 'llm' : 'rag')
+}
 
 onMounted(() => {
   inputRef.value?.focus()
@@ -208,6 +264,7 @@ async function handleStream(msg: string) {
   const url = new URL('/api/chat/stream', window.location.origin)
   url.searchParams.set('conversationId', conversationId.value)
   url.searchParams.set('message', msg)
+  url.searchParams.set('mode', chatMode.value)
   eventSource = new EventSource(url)
 
   const assistantMsg = messages.value.find(m => m.id === id)
@@ -303,6 +360,85 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 8px;
   max-width: 480px;
+}
+
+/* 模式切换 */
+.mode-switcher {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 24px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 140px;
+}
+
+.mode-btn:hover {
+  border-color: var(--text-muted);
+  transform: translateY(-2px);
+}
+
+.mode-btn.active {
+  border-color: var(--text);
+  background: var(--bg-secondary);
+}
+
+.mode-icon {
+  font-size: 24px;
+  color: var(--text-muted);
+}
+
+.mode-btn.active .mode-icon {
+  color: var(--text);
+}
+
+.mode-label {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mode-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* 模式指示器 */
+.mode-indicator {
+  padding: 8px 24px;
+  margin-bottom: 8px;
+}
+
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.mode-badge.rag {
+  border: 1px solid var(--border);
+}
+
+.mode-badge.llm {
+  border: 1px solid var(--accent);
+  color: var(--accent);
 }
 
 .suggestion-btn {
@@ -552,6 +688,20 @@ onBeforeUnmount(() => {
 
 .hint-divider {
   color: var(--border);
+}
+
+.mode-hint {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.mode-hint:hover {
+  color: var(--text);
+}
+
+.mode-hint .hint-key {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* 响应式 */

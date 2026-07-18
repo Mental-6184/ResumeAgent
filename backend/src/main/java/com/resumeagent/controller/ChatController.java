@@ -35,8 +35,9 @@ public class ChatController {
 
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@RequestParam String message,
-                             @RequestParam(defaultValue = "default") String conversationId) {
-        return chatService.stream(new ChatRequest(conversationId, message));
+                             @RequestParam(defaultValue = "default") String conversationId,
+                             @RequestParam(defaultValue = "rag") String mode) {
+        return chatService.stream(new ChatRequest(conversationId, message, mode));
     }
 
     @GetMapping("/history")

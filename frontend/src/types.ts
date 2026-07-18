@@ -1,6 +1,7 @@
 export interface ChatRequest {
   conversationId: string
   message: string
+  mode?: 'rag' | 'llm'
 }
 
 export interface ChatResponse {

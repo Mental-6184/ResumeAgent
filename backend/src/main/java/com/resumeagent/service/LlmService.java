@@ -80,6 +80,10 @@ public class LlmService {
         }
     }
 
+    public boolean isAvailable() {
+        return isConfigured();
+    }
+
     private boolean isConfigured() {
         return notBlank(properties.getOpenai().getBaseUrl()) && notBlank(properties.getOpenai().getApiKey());
     }

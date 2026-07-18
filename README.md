@@ -18,6 +18,8 @@
 <strong>模拟面试</strong> · <strong>RAG 知识库</strong> · <strong>岗位匹配</strong> · <strong>技能分析</strong> · <strong>面试助手</strong> · <strong>安全防护</strong>
 </p>
 
+🌐 **在线体验**：[https://mentalczh66.xyz](https://mentalczh66.xyz)
+
 </div>
 
 ---
@@ -505,14 +507,28 @@ OpenAI 兼容 API 客户端：
 <td valign="top" width="50%">
 
 **🚀 部署**
-- Docker 容器化
-- Nginx 反向代理
-- Ubuntu Server
+- Nginx 反向代理 + SSL
+- systemd 进程管理
+- 阿里云 ECS
 - 前后端分离架构
 
 </td>
 </tr>
 </table>
+
+---
+
+## 🌐 在线体验
+
+项目已部署上线，可直接访问体验：
+
+🔗 **[https://mentalczh66.xyz](https://mentalczh66.xyz)**
+
+**部署架构**：
+- 前端：Vue3 静态文件，由 Nginx 托管
+- 后端：Spring Boot 运行于服务器，通过 Nginx 反向代理
+- SSL：Let's Encrypt 免费证书，HTTPS 访问
+- 服务器：阿里云 ECS + Nginx + systemd
 
 ---
 
@@ -709,7 +725,12 @@ ResumeAgent/
   - 侧边栏绿点悬停弹出 LLM 配置详情卡片（模型、端点、密钥脱敏、温度、Token 上限）
   - 新增 `/api/system/llm-config` 接口，`LlmService.isAvailable()` 状态检测
   - 白色卡片设计风格与主页统一
-- [ ] **Phase 4** — 优化与部署
+- [x] **Phase 4** — 部署上线
+  - Nginx 反向代理 + HTTPS（Let's Encrypt）
+  - systemd 后端进程管理
+  - 前端静态文件托管
+  - 部署至阿里云 ECS，域名 mentalczh66.xyz
+- [ ] **Phase 5** — 优化与扩展
   - 替换 Milvus 向量数据库
   - 优化检索算法（重排序、多路召回）
   - 完善 Docker 部署
@@ -727,7 +748,7 @@ ResumeAgent/
 | 🛡️ **安全优先** | Prompt Injection 检测 + PII 脱敏，Agent 安全设计 |
 | 📡 **流式体验** | SSE 逐字输出，打字机效果，实时感知生成过程 |
 | 🔌 **优雅降级** | LLM 未配置时自动回退到基于检索的模板回答，零成本验证流程 |
-| 🐳 **部署就绪** | Docker + Nginx 架构，前后端分离，一键部署 |
+| 🌐 **已部署上线** | Nginx + systemd 架构，HTTPS 访问，域名 mentalczh66.xyz |
 | 📋 **全链路审计** | 用户输入 → 检索 → 生成 → 输出，完整可追溯 |
 
 ---
@@ -736,7 +757,7 @@ ResumeAgent/
 
 > **ResumeAgent** — 基于 RAG 的模拟面试 AI 系统
 >
-> 基于 Spring Boot + Vue3 开发模拟面试 AI 系统，通过 RAG 技术构建个人知识库，AI 以候选人身份回答面试官问题。系统所有个人数据均从知识库动态检索（零硬编码），全程第一人称回答，支持向量检索、流式对话、岗位匹配分析、技能分析和面试回答生成，并针对 Agent 场景设计 Prompt Injection 防护机制，完成 Docker 化部署。
+> 基于 Spring Boot + Vue3 开发模拟面试 AI 系统，通过 RAG 技术构建个人知识库，AI 以候选人身份回答面试官问题。系统所有个人数据均从知识库动态检索（零硬编码），全程第一人称回答，支持向量检索、流式对话、岗位匹配分析、技能分析和面试回答生成，并针对 Agent 场景设计 Prompt Injection 防护机制。已部署上线（Nginx + HTTPS），可在线体验。
 
 ---
 

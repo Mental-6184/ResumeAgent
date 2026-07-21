@@ -55,7 +55,11 @@
         <span class="prompt-char">{{ msg.role === 'user' ? '>' : '✦' }}</span>
         <div class="msg-body">
           <span v-html="formatContent(msg.content)"></span>
-          <span v-if="msg.role === 'assistant' && streaming && msg.id === streamingId" class="chat-cursor"></span>
+          <!-- 光标 + 思考提示 -->
+          <span v-if="msg.role === 'assistant' && streaming && msg.id === streamingId" class="cursor-wrapper">
+            <span class="chat-cursor"></span>
+            <ThinkingIndicator v-if="waitingForResponse" variant="inline" />
+          </span>
 
           <!-- 引用 (仅 RAG 模式显示) -->
           <div v-if="chatMode === 'rag' && msg.citations.length > 0" class="chat-citations">
@@ -65,13 +69,6 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- 加载指示器 -->
-      <div v-if="loading && !streaming" class="chat-loading">
-        <span class="loading-dot"></span>
-        <span class="loading-dot"></span>
-        <span class="loading-dot"></span>
       </div>
     </div>
 
@@ -120,6 +117,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { postChat } from '../api/chat'
+import ThinkingIndicator from './ThinkingIndicator.vue'
 
 interface RenderMessage {
   id: string
@@ -158,6 +156,7 @@ const question = ref('')
 const loading = ref(false)
 const streaming = ref(false)
 const streamingId = ref('')
+const waitingForResponse = ref(false)
 const messages = ref<RenderMessage[]>([])
 const messagesRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
@@ -257,6 +256,7 @@ function closeStream() {
 async function handleStream(msg: string) {
   closeStream()
   streaming.value = true
+  waitingForResponse.value = true
   pushMessage('user', msg)
   const id = pushMessage('assistant', '')
   streamingId.value = id
@@ -271,6 +271,7 @@ async function handleStream(msg: string) {
 
   eventSource.onmessage = (event) => {
     if (assistantMsg) {
+      waitingForResponse.value = false
       assistantMsg.content = assistantMsg.content
         ? `${assistantMsg.content}\n${event.data}`
         : event.data
@@ -281,6 +282,7 @@ async function handleStream(msg: string) {
 
   eventSource.addEventListener('done', () => {
     streaming.value = false
+    waitingForResponse.value = false
     streamingId.value = ''
     closeStream()
     nextTick(() => inputRef.value?.focus())
@@ -288,6 +290,7 @@ async function handleStream(msg: string) {
 
   eventSource.onerror = () => {
     streaming.value = false
+    waitingForResponse.value = false
     streamingId.value = ''
     closeStream()
     if (assistantMsg && !assistantMsg.content) {
@@ -502,12 +505,18 @@ onBeforeUnmount(() => {
   color: var(--text);
 }
 
+.cursor-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 2px;
+}
+
 .chat-cursor {
   display: inline-block;
   width: 7px;
   height: 15px;
   background: var(--text);
-  margin-left: 2px;
   vertical-align: text-bottom;
   animation: blink 1s step-end infinite;
 }

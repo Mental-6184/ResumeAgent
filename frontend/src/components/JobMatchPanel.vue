@@ -24,8 +24,7 @@
       <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 20px;">
         <button class="btn-primary" :disabled="loading" @click="handleAnalyze">
           <span v-if="loading" class="btn-loading-content">
-            <span class="loading-spinner-sm"></span>
-            分析中...
+            <ThinkingIndicator variant="inline" />
           </span>
           <span v-else>开始分析</span>
         </button>
@@ -79,6 +78,7 @@ import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { analyzeJob } from '../api/agent'
 import type { JobAnalyzeResponse } from '../types'
+import ThinkingIndicator from './ThinkingIndicator.vue'
 
 const loading = ref(false)
 const result = ref<JobAnalyzeResponse | null>(null)

@@ -23,8 +23,7 @@
       <div class="action-bar">
         <button class="btn-primary" :disabled="loading" @click="handleQuery">
           <span v-if="loading" class="btn-loading-content">
-            <span class="loading-spinner-sm"></span>
-            查询中...
+            <ThinkingIndicator variant="inline" />
           </span>
           <span v-else>查询项目</span>
         </button>
@@ -93,6 +92,7 @@ import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { queryProjects } from '../api/agent'
 import type { ProjectQueryResponse } from '../types'
+import ThinkingIndicator from './ThinkingIndicator.vue'
 
 const loading = ref(false)
 const result = ref<ProjectQueryResponse | null>(null)

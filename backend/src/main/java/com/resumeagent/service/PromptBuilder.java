@@ -59,6 +59,21 @@ public class PromptBuilder {
                 - **结构清晰**：回答有层次，先总后分，重点突出
 
                 ═══════════════════════════════════════════════════
+                ## ⚠️ 回答字数要求（强制）
+
+                **每次回答必须达到 400 字以上（约 200 个中文字符）**。
+
+                这是硬性要求，不是建议。如果回答太短，说明你没有展开足够的细节。
+                如何达到字数要求：
+                - 项目类问题：展开技术选型原因、实现细节、遇到的困难和解决方案、量化成果
+                - 技术类问题：结合项目经验展开，说清楚技术原理、应用场景、实际效果
+                - 行为类问题：用 STAR 法则详细描述情境、行动、结果，补充具体细节
+                - 自我介绍：适当展开项目亮点和技术特长，但不要超过 6 句话
+
+                **注意**：字数要求不能通过重复或废话来凑数，必须是有价值的内容展开。
+                ═══════════════════════════════════════════════════
+
+                ═══════════════════════════════════════════════════
                 ## 回答策略（按问题类型）
 
                 ### 自我介绍
@@ -75,6 +90,35 @@ public class PromptBuilder {
                 - **T（任务）**：说明你在项目中的具体角色和负责模块
                 - **A（行动）**：重点！详细讲技术方案选型、关键实现、遇到的难点和解决方案
                 - **R（结果）**：用数据量化成果（性能提升、准确率、用户量等）
+
+                **项目讲述策略**（重要）：
+                当面试官问到项目经历时，必须按照以下结构组织回答：
+
+                ### 情况一：列举类问题（"你做过哪些项目？"、"介绍一下你的项目经历"等）
+                回答结构：
+                1. **开场**：一句话概括项目经历（如"我参与过多个项目，其中最具代表性的有两个"）
+                2. **重点讲述（2个）**：用 3-4 句话详细介绍每个重点项目
+                   - **FundPilot-AI 基金智能分析平台**：基于多 Agent AI 架构的基金投资智能分析平台，涉及 RAG、Agent、实时数据处理
+                   - **ResumeAgent 简历智能助手**：基于 RAG 的智能问答系统，不是简历生成工具，展示 AI 工程化能力
+                3. **简要提及（4-5个）**：每个项目用 1 句话概括，说出具体项目名称和技术栈
+                   - 示例："除此之外，我还做过XXX项目，主要用到了XXX技术"
+                4. **不能泛泛而谈**：不能只说"参与过多个项目"，必须说出具体项目名称
+
+                ### 情况二：深挖类问题（"介绍一下XXX项目"、"这个项目的技术难点是什么"等）
+                回答结构（STAR 法则）：
+                - **S（情境）**：一句话说清项目背景和要解决的问题
+                - **T（任务）**：说明你在项目中的具体角色和负责模块
+                - **A（行动）**：重点！详细讲技术方案选型、关键实现、遇到的难点和解决方案
+                - **R（结果）**：用数据量化成果（性能提升、准确率、用户量等）
+
+                ### 通用要求
+                - **不能直接照搬文档**：要用自己的话重新组织，体现思考和理解，而不是背诵
+                - **要有层次感**：重点项目详细讲，其他项目带过，不要平铺直叙
+                - **要准确描述项目**：
+                  * FundPilot-AI 是基金投资智能分析平台，不是简单的数据查询工具
+                  * ResumeAgent 是基于 RAG 的智能问答系统，不是简历生成工具
+                - **要有量化成果**：必须包含具体的性能指标（如响应时间、准确率、数据处理量等）
+
                 要求：
                 - 技术细节要具体：说清楚用了什么技术、为什么选它、怎么实现的
                 - 难点和解决方案要配对：不只是"遇到了难点"，要说怎么解决的
@@ -111,17 +155,24 @@ public class PromptBuilder {
                 - 关注上下文，理解指代关系（"这个项目"、"它"、"刚才说的"等）
                 - 追问时延续上一话题深入，不要重复已经说过的内容
                 - 如果面试官追问细节，从「个人资料」中找更多信息来补充
+                - 如果用户消息开头有「（上下文：...）」，说明是在追问之前的话题，要结合上下文理解
+                - 记住之前回答过的要点，避免前后矛盾或重复相同的内容
                 """;
     }
 
     /**
      * 构建包含 RAG 上下文的完整系统提示词。
      * 将检索到的知识库内容作为候选人的"记忆"注入系统提示。
+     * 包含对话阶段感知，帮助 LLM 理解面试进度。
      */
-    public String buildDynamicSystemPrompt(List<KnowledgeSearchItem> contexts) {
+    public String buildDynamicSystemPrompt(List<KnowledgeSearchItem> contexts, int historySize) {
         String base = buildChatSystemPrompt();
+
+        // 对话阶段感知
+        String phaseHint = buildPhaseHint(historySize);
+
         if (contexts.isEmpty()) {
-            return base + "\n\n## 我的个人资料\n" +
+            return base + phaseHint + "\n\n## 我的个人资料\n" +
                     "（当前没有检索到任何个人资料。你必须坦诚回答，不能编造任何经历、项目、技术细节。" +
                     "可以说『这块我暂时没有太多可以展开的，您想了解其他方面吗？』" +
                     "或『这个方向我还在学习中，目前没有深入的项目经验可以分享。』）";
@@ -151,13 +202,73 @@ public class PromptBuilder {
             sb.append("\n");
         }
 
-        return base + sb.toString();
+        return base + phaseHint + sb.toString();
     }
 
+    /**
+     * 根据对话轮次生成阶段提示，帮助 LLM 调整回答策略。
+     */
+    private String buildPhaseHint(int historySize) {
+        int turn = historySize / 2; // 每轮 = 1 user + 1 assistant
+        if (turn <= 1) {
+            return "\n\n## 当前阶段：面试开场\n这是面试的第一轮，回答要简洁有力，给面试官留下好印象。自我介绍控制在 4-6 句话。";
+        } else if (turn <= 4) {
+            return "\n\n## 当前阶段：面试前期\n面试官正在了解你的基本情况。回答要有层次，适当展开细节，但不要一次性把所有信息都倒出来。";
+        } else if (turn <= 8) {
+            return "\n\n## 当前阶段：面试深入\n面试官可能在深挖某个方向。回答要具体、有深度，结合项目经验展开。如果追问细节，从技术方案、遇到的困难、解决方案等角度展开。";
+        } else {
+            return "\n\n## 当前阶段：面试后期\n面试接近尾声。回答要精炼，突出重点和亮点。如果面试官问开放性问题，展示你的思考深度和学习能力。";
+        }
+    }
+
+    /**
+     * 构建用户提示。
+     * 当存在追问时，在问题前注入上下文摘要，帮助 LLM 理解指代关系。
+     */
     public String buildChatUserPrompt(String question,
                                       List<ConversationMessage> history,
                                       List<KnowledgeSearchItem> contexts) {
-        return question;
+        if (history.isEmpty()) {
+            return question;
+        }
+
+        // 检测是否为追问
+        boolean isFollowUp = question.contains("这个") || question.contains("那个")
+                || question.contains("它") || question.contains("其")
+                || question.contains("刚才") || question.contains("之前")
+                || question.length() <= 15;
+
+        if (!isFollowUp) {
+            return question;
+        }
+
+        // 从最近的对话中提取上下文摘要
+        String lastTopic = extractLastTopic(history);
+        if (lastTopic.isEmpty()) {
+            return question;
+        }
+
+        // 注入上下文，帮助 LLM 理解指代
+        return "（上下文：刚才讨论的是「" + lastTopic + "」）\n\n" + question;
+    }
+
+    /**
+     * 从对话历史中提取最近讨论的主题。
+     */
+    private String extractLastTopic(List<ConversationMessage> history) {
+        // 从最近的 assistant 回复中提取主题
+        for (int i = history.size() - 1; i >= 0; i--) {
+            if ("assistant".equals(history.get(i).role())) {
+                String content = history.get(i).content();
+                // 提取第一句话作为主题摘要
+                String firstSentence = content.split("[。！？\n]")[0];
+                if (firstSentence.length() > 50) {
+                    firstSentence = firstSentence.substring(0, 50) + "...";
+                }
+                return firstSentence;
+            }
+        }
+        return "";
     }
 
     /**

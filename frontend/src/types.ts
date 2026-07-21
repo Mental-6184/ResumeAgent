@@ -105,3 +105,18 @@ export interface TechQuoteResponse {
   author: string
   category: string
 }
+
+// ===== 技术引航图 =====
+
+export interface TechGuideModule {
+  id: string
+  name: string
+  icon: string
+  description: string
+  tags: string[]
+}
+
+export interface TechGuideMessage {
+  role: 'user' | 'assistant'
+  content: string
+}

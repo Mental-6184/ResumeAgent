@@ -26,8 +26,7 @@
       <div class="action-bar">
         <button class="btn-primary" :disabled="loading" @click="handleGenerate">
           <span v-if="loading" class="btn-loading-content">
-            <span class="loading-spinner-sm"></span>
-            生成中...
+            <ThinkingIndicator variant="inline" />
           </span>
           <span v-else>生成回答</span>
         </button>
@@ -82,6 +81,7 @@ import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { generateInterviewAnswer } from '../api/agent'
 import type { InterviewAnswerResponse } from '../types'
+import ThinkingIndicator from './ThinkingIndicator.vue'
 
 interface Example {
   label: string

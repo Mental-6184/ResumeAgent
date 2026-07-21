@@ -8,8 +8,7 @@
         </p>
         <button class="btn-primary" :disabled="loading" @click="handleAnalyze">
           <span v-if="loading" class="btn-loading-content">
-            <span class="loading-spinner-sm"></span>
-            分析中...
+            <ThinkingIndicator variant="inline" />
           </span>
           <span v-else>一键分析技能</span>
         </button>
@@ -71,6 +70,7 @@ import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { analyzeSkills } from '../api/agent'
 import type { SkillAnalysisResponse } from '../types'
+import ThinkingIndicator from './ThinkingIndicator.vue'
 
 const loading = ref(false)
 const result = ref<SkillAnalysisResponse | null>(null)

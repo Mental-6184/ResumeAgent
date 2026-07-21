@@ -170,6 +170,7 @@ const features = [
   { icon: '◎', name: '岗位匹配', desc: '分析简历与目标岗位的匹配度', panel: 'analyze' },
   { icon: '◇', name: '面试助手', desc: '模拟面试问答与准备', panel: 'interview' },
   { icon: '◈', name: '技能分析', desc: '梳理技术栈与能力图谱', panel: 'skill' },
+  { icon: '⊕', name: '技术引航图', desc: 'AI导师互动教学，8大技术模块', panel: 'techguide' },
   { icon: '▣', name: '项目查询', desc: '深度检索项目经历细节', panel: 'project' }
 ]
 

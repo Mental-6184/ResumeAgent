@@ -178,6 +178,21 @@ const steps: GuideStep[] = [
     panel: 'project'
   },
   {
+    icon: '⊕',
+    title: '技术引航图',
+    description: 'AI 导师互动教学系统，涵盖 8 大技术模块，从基础到实战，系统化提升技术能力。',
+    items: [
+      { icon: '☕', label: 'Java 基础', desc: '集合框架、多线程、JVM 内存模型' },
+      { icon: '🌿', label: 'Spring 生态', desc: 'IoC/AOP、Boot 自动配置、Security' },
+      { icon: '🗄️', label: '数据库与缓存', desc: 'MySQL 索引优化、Redis 缓存策略' },
+      { icon: '🔍', label: 'RAG 核心技术', desc: '向量检索、Embedding、分块策略' },
+      { icon: '🤖', label: 'Agent 架构', desc: '意图路由、工具调用、多 Agent 编排' },
+      { icon: '🔒', label: '安全机制', desc: '认证授权、PII 脱敏、注入防护' }
+    ],
+    tip: '点击知识点标签即可开始 AI 导师教学，支持追问和深入探讨',
+    panel: 'techguide'
+  },
+  {
     icon: '✦',
     title: '开始使用',
     description: '现在你已经了解了所有模块的功能，可以开始使用了！',
@@ -225,6 +240,7 @@ function close() {
 .guide-modal {
   width: 520px;
   max-width: 90vw;
+  height: 520px;
   max-height: 80vh;
   background: var(--bg);
   border: 1px solid var(--border);

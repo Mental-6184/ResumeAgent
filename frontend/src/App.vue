@@ -91,6 +91,7 @@
         <InterviewPanel v-else-if="activePanel === 'interview'" />
         <AuditPanel v-else-if="activePanel === 'audit'" />
         <ProjectDetailPanel v-else-if="activePanel === 'projects'" />
+        <TechGuidePanel v-else-if="activePanel === 'techguide'" />
       </transition>
     </main>
 
@@ -109,6 +110,7 @@ import JobMatchPanel from './components/JobMatchPanel.vue'
 import InterviewPanel from './components/InterviewPanel.vue'
 import AuditPanel from './components/AuditPanel.vue'
 import ProjectDetailPanel from './components/ProjectDetailPanel.vue'
+import TechGuidePanel from './components/TechGuidePanel.vue'
 import GuideModal from './components/GuideModal.vue'
 
 const activePanel = ref('chat')
@@ -136,14 +138,15 @@ const navItems = [
   { key: 'skill',     icon: '◈', label: '技能分析' },
   { key: 'project',   icon: '▣', label: '项目查询' },
   { key: 'projects',  icon: '⊞', label: '项目详情' },
+  { key: 'techguide', icon: '⊕', label: '技术引航图' },
   // 安全审计已隐藏，仅管理员可用。如需恢复，取消下行注释：
   // { key: 'audit',     icon: '▤', label: '安全审计' },
 ]
 
-// 每次加载都显示欢迎页面，首次访问显示引导
+// 每次加载都显示欢迎页面，每次进入网站都显示教学引导（同一会话内关闭后不再重复显示）
 onMounted(() => {
   showWelcome.value = true
-  const hasVisited = localStorage.getItem('resumeagent_guide_done')
+  const hasVisited = sessionStorage.getItem('resumeagent_guide_done')
   if (!hasVisited) {
     showGuide.value = true
   }
@@ -215,7 +218,7 @@ function onDotLeave() {
 
 function closeGuide() {
   showGuide.value = false
-  localStorage.setItem('resumeagent_guide_done', 'true')
+  sessionStorage.setItem('resumeagent_guide_done', 'true')
 }
 </script>
 

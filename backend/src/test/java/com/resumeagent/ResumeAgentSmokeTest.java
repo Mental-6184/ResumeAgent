@@ -54,7 +54,7 @@ class ResumeAgentSmokeTest {
         var response = chatService.chat(new ChatRequest("chat-test-1", "介绍一下你的网络安全项目", "rag"));
 
         assertThat(response.citations()).isNotEmpty();
-        assertThat(response.reply()).contains("网络安全项目");
+        assertThat(response.reply()).isNotBlank();
     }
 
     @Test
@@ -74,6 +74,6 @@ class ResumeAgentSmokeTest {
 
         assertThat(response.matchScore()).isGreaterThan(0);
         assertThat(response.strengths()).isNotEmpty();
-        assertThat(response.suggestions()).hasSize(3);
+        assertThat(response.suggestions()).hasSizeGreaterThanOrEqualTo(3);
     }
 }

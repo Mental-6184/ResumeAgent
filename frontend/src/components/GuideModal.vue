@@ -242,12 +242,14 @@ function close() {
   max-width: 90vw;
   height: 520px;
   max-height: 80vh;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 20px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.10), 0 4px 12px rgba(0, 0, 0, 0.04);
   overflow: hidden;
 }
 
@@ -325,14 +327,15 @@ function close() {
   align-items: flex-start;
   gap: 12px;
   padding: 12px 14px;
-  background: var(--bg-secondary);
+  background: rgba(255, 255, 255, 0.5);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  transition: all 0.15s;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-normal);
 }
 
 .guide-item:hover {
-  border-color: var(--text-muted);
+  border-color: var(--accent-light);
+  background: var(--accent-soft);
 }
 
 .guide-item-icon {
@@ -437,12 +440,14 @@ function close() {
 }
 
 .guide-btn-primary {
-  background: var(--text);
-  color: var(--bg);
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  color: #fff;
+  box-shadow: 0 2px 8px var(--accent-glow);
 }
 
 .guide-btn-primary:hover {
-  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--accent-glow);
 }
 
 /* 动画 */

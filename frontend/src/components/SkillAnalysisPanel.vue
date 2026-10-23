@@ -17,12 +17,12 @@
       <transition name="fade" mode="out-in">
         <div v-if="result" class="result-section">
           <div class="result-card summary-card">
-            <div class="result-title">摘要</div>
+            <div class="result-title">✦ 摘要</div>
             <div class="result-content">{{ result.summary }}</div>
           </div>
 
           <div class="result-card">
-            <div class="result-title">核心技能</div>
+            <div class="result-title">◈ 核心技能</div>
             <div class="result-tags">
               <span v-for="skill in result.coreSkills" :key="skill" class="tag skill-tag">
                 {{ skill }}
@@ -31,7 +31,7 @@
           </div>
 
           <div class="result-card">
-            <div class="result-title">技术优势</div>
+            <div class="result-title">◇ 技术优势</div>
             <div class="result-content">
               <ul>
                 <li v-for="s in result.technicalStrengths" :key="s">{{ s }}</li>
@@ -40,7 +40,7 @@
           </div>
 
           <div class="result-card">
-            <div class="result-title">能力覆盖面</div>
+            <div class="result-title">◎ 能力覆盖面</div>
             <div class="result-tags" v-if="result.coverageAreas.length > 0">
               <span v-for="area in result.coverageAreas" :key="area" class="tag area-tag">
                 {{ area }}
@@ -52,7 +52,7 @@
           </div>
 
           <div class="result-card">
-            <div class="result-title">改进建议</div>
+            <div class="result-title">△ 改进建议</div>
             <div class="result-content">
               <ul>
                 <li v-for="s in result.improvementSuggestions" :key="s">{{ s }}</li>
@@ -125,23 +125,26 @@ async function handleAnalyze() {
 }
 
 .skill-tag {
-  transition: all var(--transition-fast);
+  transition: all var(--transition-normal);
 }
 
 .skill-tag:hover {
-  background: var(--text);
-  color: var(--bg);
-  border-color: var(--text);
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  color: #fff;
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px var(--accent-glow);
 }
 
 .area-tag {
-  background: var(--bg);
+  background: var(--bg-glass);
   border-style: dashed;
 }
 
 .area-tag:hover {
   border-style: solid;
-  background: var(--bg-secondary);
+  background: var(--accent-soft);
+  border-color: var(--accent-light);
 }
 
 .empty-hint {
@@ -155,19 +158,6 @@ async function handleAnalyze() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-.loading-spinner-sm {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .fade-enter-active,

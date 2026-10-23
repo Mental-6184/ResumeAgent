@@ -51,7 +51,9 @@
 
 ResumeAgent 是一个基于 **Spring Boot 3 + Vue3 + RAG + Agent** 构建的个人 AI 简历助手系统。
 
-系统将你的简历、项目文档、技术博客、GitHub 项目说明等个人资料导入知识库，通过 **RAG（检索增强生成）** 技术检索相关上下文，结合 LLM 生成**准确、可追溯**的回答。所有个人数据均从知识库动态检索，**零硬编码**，确保回答始终基于最新资料。同时内置 Agent 能力，支持岗位匹配分析、技能图谱总结、面试回答生成等高级功能。
+系统将你的简历、项目文档、技术博客、GitHub 项目说明等个人资料导入知识库，通过 **RAG（检索增强生成）** 技术检索相关上下文，结合 LLM 生成**准确、可追溯**的回答。个人资料均从知识库动态检索，不在代码中硬编码，确保回答始终基于最新资料。同时内置 Agent 能力，支持岗位匹配分析、技能图谱总结、面试回答生成等高级功能。
+
+新增岗位工作区：可保存岗位 JD、投递状态、匹配报告、定制简历建议和关联面试复盘，数据持久化到 `backend/data/jobs/`。
 
 > 🎯 **适用场景**：求职面试准备、个人技术品牌展示、项目经历梳理、能力盘点与职业规划。
 
@@ -101,9 +103,9 @@ ResumeAgent 是一个基于 **Spring Boot 3 + Vue3 + RAG + Agent** 构建的个�
 
 | 类型 | 格式 | 内容 |
 |:---|:---:|:---|
-| 📄 简历 | PDF / Word / TXT | 个人基本信息、教育、经历 |
+| 📄 简历 | PDF / TXT / MD | 个人基本信息、教育、经历 |
 | 📁 项目文档 | Markdown / TXT | 项目架构、技术方案、成果 |
-| 📝 技术博客 | Markdown / HTML / TXT | 技术文章、学习笔记 |
+| 📝 技术博客 | Markdown / TXT | 技术文章、学习笔记 |
 | 🐙 GitHub 说明 | Markdown | 项目 README、文档 |
 
 **核心流程**：
@@ -142,7 +144,7 @@ Agent 提供四类高级能力，不只是简单问答：
 |:---|:---|:---|
 | 🛡️ **Prompt Injection 检测** | 识别恶意注入攻击 | 正则匹配中英文攻击模式（"忽略之前指令"、"泄露系统提示词"等） |
 | 🔒 **PII 信息脱敏** | 保护个人敏感信息 | 自动识别并脱敏手机号、邮箱、身份证号 |
-| 📋 **对话审计日志** | 全链路交互追踪 | 记录用户输入、检索片段、模型输出、工具调用 |
+| 📋 **对话审计日志** | 全链路交互追踪 | 记录脱敏后的用户输入、检索片段和模型输出 |
 
 ### 📡 SSE 流式对话
 
@@ -287,7 +289,7 @@ flowchart TB
 上传文件
   │
   ▼
-文本解析（PDF/Word/Markdown/TXT）
+文本解析（PDF/Markdown/TXT）
   │
   ▼
 文本清洗（去除噪音、规范化）
@@ -377,7 +379,7 @@ OpenAI 兼容 API 客户端：
 | 方法 | 路径 | 说明 |
 |:---:|:---|:---|
 | `POST` | `/api/chat` | 普通问答，返回完整回答 |
-| `GET` | `/api/chat/stream` | SSE 流式问答，逐行返回 |
+| `POST` | `/api/chat/stream` | JSON 请求的 SSE 流式问答，逐行返回 |
 | `GET` | `/api/chat/history` | 获取指定会话的历史消息 |
 
 **请求参数**：
@@ -385,9 +387,12 @@ OpenAI 兼容 API 客户端：
 ```json
 {
   "message": "介绍一下你的项目经历",
-  "conversationId": "optional-session-id"
+  "conversationId": "session-id",
+  "mode": "rag"
 }
 ```
+
+`conversationId` 和 `message` 必填，`mode` 缺省为 `rag`。
 
 **响应示例**：
 
@@ -436,18 +441,29 @@ OpenAI 兼容 API 客户端：
 |:---:|:---|:---|
 | `POST` | `/api/rag/ingest` | 上传文件，解析入库 |
 | `GET` | `/api/rag/search` | 检索知识片段（调试用） |
+| `POST` | `/api/rag/upload` | 上传 PDF/TXT/MD 文件并解析入库 |
 
 ### 审计接口
 
 | 方法 | 路径 | 说明 |
 |:---:|:---|:---|
-| `GET` | `/api/audit` | 获取安全审计日志 |
+| `GET` | `/api/audit/logs` | 获取安全审计日志（需要管理员 Bearer Token） |
+
+### 岗位工作区接口
+
+| `GET/POST` | `/api/jobs` | 查询或创建岗位记录 |
+| `GET/PUT/DELETE` | `/api/jobs/{id}` | 查看、编辑或删除岗位 |
+| `PATCH` | `/api/jobs/{id}/status` | 更新投递状态 |
+| `POST` | `/api/jobs/{id}/match-report` | 生成岗位匹配报告 |
+| `POST/PUT` | `/api/jobs/{id}/resume-draft` | 生成或保存岗位专属简历建议 |
+| `GET/POST/DELETE` | `/api/jobs/{id}/reviews` | 管理关联面试复盘 |
 
 ### 系统接口
 
 | 方法 | 路径 | 说明 |
 |:---:|:---|:---|
 | `GET` | `/api/system/llm-config` | 查询 LLM 配置信息（API 密钥脱敏） |
+| `GET` | `/api/system/health` | 查询服务健康状态（不含敏感数据） |
 
 **响应示例**：
 
@@ -455,7 +471,7 @@ OpenAI 兼容 API 客户端：
 {
   "baseUrl": "https://api.openai.com/v1",
   "model": "gpt-4o-mini",
-  "apiKey": "sk-xxxx...abcd",
+  "apiKey": "***",
   "temperature": 0.2,
   "maxTokens": 800,
   "llmAvailable": true
@@ -497,7 +513,7 @@ OpenAI 兼容 API 客户端：
 **🧠 AI 能力**
 - LLM 对话生成（OpenAI 兼容）
 - RAG 检索增强生成
-- Agent Tool Calling
+- Agent 服务编排与分析
 - 哈希嵌入（128 维）
 - 混合检索排序
 
@@ -542,7 +558,7 @@ cd ResumeAgent
 resumeagent:
   openai:
     base-url: "https://your-api-endpoint/v1"   # API 地址
-    api-key: "sk-xxxx"                          # API 密钥
+    api-key: "${ZHIPU_API_KEY:}"                # 通过环境变量注入
     chat-model: gpt-4o-mini                     # 模型名称
 ```
 
@@ -695,10 +711,10 @@ ResumeAgent/
   - Vue 聊天页面、Spring Boot 接口、LLM 调用、SSE 流式输出
 - [x] **Phase 2** — RAG 知识库
   - 文档解析、文本切片、Embedding 向量化、向量检索、检索增强问答
-- [x] **Phase 3** — Agent 能力
-  - 工具调用、岗位匹配、技能分析、安全防护、对话审计
+- [x] **Phase 3** — 服务编排与分析能力
+  - 岗位匹配、技能分析、安全防护、对话审计
 - [x] **Phase 3.5** — RAG 全面化重构
-  - 移除所有硬编码个人数据，系统提示词和 Agent 分析完全基于知识库动态构建
+  - 个人资料不硬编码，系统提示词和分析能力基于知识库动态构建
   - PromptBuilder 动态系统提示词，RAG 检索结果作为 LLM 背景知识
   - AgentService 所有 fallback 方法改为基于知识库检索生成
 - [x] **Phase 3.6** — 前端 UI 重构
@@ -722,7 +738,7 @@ ResumeAgent/
 | 亮点 | 说明 |
 |:---|:---|
 | 🧠 **RAG 驱动** | 基于个人知识库动态生成回答，引用可溯源，大幅降低幻觉 |
-| 🚫 **零硬编码** | 所有个人数据从知识库检索，系统提示词和 Agent 分析均动态构建 |
+| 🚫 **个人资料不硬编码** | 所有个人数据从知识库检索，系统提示词和分析结果基于当前资料动态构建 |
 | 🤖 **Agent 能力** | 岗位匹配、技能分析、面试辅助，不只是简单问答 |
 | 🛡️ **安全优先** | Prompt Injection 检测 + PII 脱敏，Agent 安全设计 |
 | 📡 **流式体验** | SSE 逐字输出，打字机效果，实时感知生成过程 |
@@ -736,7 +752,7 @@ ResumeAgent/
 
 > **ResumeAgent** — 基于 RAG 的模拟面试 AI 系统
 >
-> 基于 Spring Boot + Vue3 开发模拟面试 AI 系统，通过 RAG 技术构建个人知识库，AI 以候选人身份回答面试官问题。系统所有个人数据均从知识库动态检索（零硬编码），全程第一人称回答，支持向量检索、流式对话、岗位匹配分析、技能分析和面试回答生成，并针对 Agent 场景设计 Prompt Injection 防护机制，完成 Docker 化部署。
+> 基于 Spring Boot + Vue3 开发模拟面试 AI 系统，通过 RAG 技术构建个人知识库，AI 以候选人身份回答面试官问题。个人资料均从知识库动态检索，全程第一人称回答，支持向量检索、流式对话、岗位匹配分析、技能分析和面试回答生成，并针对 Agent 场景设计 Prompt Injection 防护机制。
 
 ---
 

@@ -1,12 +1,14 @@
 <template>
   <div class="welcome-container">
-    <!-- 背景装饰 -->
+    <!-- 页面背景 -->
     <div class="welcome-bg">
       <div class="bg-grid"></div>
       <div class="bg-glow"></div>
+      <div class="bg-orb bg-orb-1"></div>
+      <div class="bg-orb bg-orb-2"></div>
     </div>
 
-    <!-- 左侧装饰：技术关键词 -->
+    <!-- 左侧装饰 -->
     <div class="side-panel side-left" :class="{ 'visible': isReady }">
       <div class="side-section">
         <div class="side-label">技术栈</div>
@@ -25,7 +27,7 @@
       </div>
     </div>
 
-    <!-- 右侧装饰：系统能力 -->
+    <!-- 右侧装饰 -->
     <div class="side-panel side-right" :class="{ 'visible': isReady }">
       <div class="side-section">
         <div class="side-label">核心能力</div>
@@ -49,22 +51,20 @@
 
     <!-- 主欢迎区域 -->
     <div class="welcome-content" :class="{ 'visible': isReady }">
-      <!-- 主标题区 -->
       <div class="hero-section">
         <div class="hero-badge">
           <span class="badge-dot"></span>
           <span>AI-Powered</span>
         </div>
-        <h1 class="welcome-title">
-          <span class="title-main">Resume</span><span class="title-accent">Agent</span>
-        </h1>
+        <h1 class="welcome-title">开始准备你的下一次机会</h1>
         <p class="welcome-desc">
-          基于 RAG 的模拟面试助手<br>
-          <span class="desc-highlight">导入简历 → 知识检索 → 以你的身份回答</span>
+          你的求职资料、岗位分析和面试训练，都集中在这里完成。
         </p>
+        <button class="welcome-primary" @click="handleQuestion('请介绍一下你自己')">
+          <span>开始模拟面试</span><span class="primary-arrow">→</span>
+        </button>
       </div>
 
-      <!-- 技术话语 -->
       <div class="tech-quote" v-if="techQuote">
         <div class="quote-icon">❝</div>
         <div class="quote-body">
@@ -80,9 +80,8 @@
         <span class="loading-dots">加载中</span>
       </div>
 
-      <!-- 快速提问 -->
       <div class="welcome-actions">
-        <div class="action-label">快速开始</div>
+        <div class="section-kicker">快速开始</div>
         <div class="action-chips">
           <button
             v-for="(q, i) in questions"
@@ -96,7 +95,6 @@
         </div>
       </div>
 
-      <!-- 功能入口 -->
       <div class="welcome-features">
         <button
           v-for="f in features"
@@ -112,9 +110,17 @@
           <span class="feature-arrow">→</span>
         </button>
       </div>
+
+      <div class="welcome-flow">
+        <div class="section-kicker">使用流程</div>
+        <div class="flow-cards">
+          <div class="flow-card"><span>01</span><strong>完善档案</strong><small>上传简历与经历</small></div>
+          <div class="flow-card"><span>02</span><strong>选择目标</strong><small>匹配岗位或练习面试</small></div>
+          <div class="flow-card"><span>03</span><strong>持续提升</strong><small>查看分析与复盘</small></div>
+        </div>
+      </div>
     </div>
 
-    <!-- 底部装饰 -->
     <div class="welcome-footer" :class="{ 'visible': isReady }">
       <span class="footer-text">按 Enter 开始对话 · 使用侧边栏探索更多功能</span>
     </div>
@@ -163,15 +169,16 @@ const stats = [
 ]
 
 const fileFormats = [
-  'PDF', 'Word', 'Markdown', 'TXT', 'HTML'
+  'PDF', 'Markdown', 'TXT'
 ]
 
 const features = [
-  { icon: '◎', name: '岗位匹配', desc: '分析简历与目标岗位的匹配度', panel: 'analyze' },
-  { icon: '◇', name: '面试助手', desc: '模拟面试问答与准备', panel: 'interview' },
-  { icon: '◈', name: '技能分析', desc: '梳理技术栈与能力图谱', panel: 'skill' },
-  { icon: '⊕', name: '技术引航图', desc: 'AI导师互动教学，8大技术模块', panel: 'techguide' },
-  { icon: '▣', name: '项目查询', desc: '深度检索项目经历细节', panel: 'project' }
+  { icon: '📌', name: '岗位工作区', desc: '管理岗位、报告、简历建议与投递进度', panel: 'jobs' },
+  { icon: '🎯', name: '岗位匹配', desc: '分析简历与目标岗位的匹配度', panel: 'analyze' },
+  { icon: '💡', name: '面试助手', desc: '模拟面试问答与准备', panel: 'interview' },
+  { icon: '📊', name: '技能分析', desc: '梳理技术栈与能力图谱', panel: 'skill' },
+  { icon: '🧭', name: '技术引航图', desc: 'AI导师互动教学，8大技术模块', panel: 'techguide' },
+  { icon: '🔍', name: '项目查询', desc: '深度检索项目经历细节', panel: 'project' }
 ]
 
 function handleKeydown(e: KeyboardEvent) {
@@ -185,8 +192,7 @@ async function loadTechQuote() {
   quoteLoading.value = true
   try {
     techQuote.value = await getTechQuote()
-  } catch (e) {
-    // 失败时使用默认话语
+  } catch {
     techQuote.value = {
       quote: '程序必须是写给人阅读的，顺便让机器执行。',
       author: 'Harold Abelson',
@@ -231,7 +237,7 @@ function handleFeature(panel: string) {
   overflow: hidden;
 }
 
-/* 背景装饰 */
+/* ─── Background ─── */
 .welcome-bg {
   position: absolute;
   inset: 0;
@@ -243,10 +249,10 @@ function handleFeature(panel: string) {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(var(--border-light) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border-light) 1px, transparent 1px);
+    linear-gradient(rgba(36, 86, 230, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(36, 86, 230, 0.04) 1px, transparent 1px);
   background-size: 60px 60px;
-  opacity: 0.5;
+  opacity: 0.8;
   mask-image: radial-gradient(ellipse 60% 50% at 50% 50%, black 20%, transparent 70%);
   -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 50%, black 20%, transparent 70%);
 }
@@ -256,10 +262,40 @@ function handleFeature(panel: string) {
   top: -20%;
   left: 50%;
   transform: translateX(-50%);
-  width: 800px;
-  height: 500px;
-  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.03) 0%, transparent 70%);
+  width: 900px;
+  height: 600px;
+  background: radial-gradient(ellipse, rgba(36, 86, 230, 0.06) 0%, transparent 70%);
   border-radius: 50%;
+}
+
+.bg-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+}
+
+.bg-orb-1 {
+  width: 300px;
+  height: 300px;
+  background: rgba(36, 86, 230, 0.08);
+  top: 10%;
+  right: 10%;
+  animation: orbFloat 20s ease-in-out infinite;
+}
+
+.bg-orb-2 {
+  width: 250px;
+  height: 250px;
+  background: rgba(91, 143, 217, 0.06);
+  bottom: 15%;
+  left: 15%;
+  animation: orbFloat 25s ease-in-out infinite reverse;
+}
+
+@keyframes orbFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -20px) scale(1.05); }
+  66% { transform: translate(-20px, 30px) scale(0.95); }
 }
 
 .welcome-content {
@@ -278,7 +314,7 @@ function handleFeature(panel: string) {
   transform: translateY(0);
 }
 
-/* Hero 区域 */
+/* ─── Hero ─── */
 .hero-section {
   margin-bottom: 32px;
 }
@@ -287,9 +323,11 @@ function handleFeature(panel: string) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
+  padding: 5px 14px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 20px;
   font-family: var(--font-mono);
   font-size: 11px;
@@ -302,22 +340,20 @@ function handleFeature(panel: string) {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #22c55e;
+  background: var(--success);
   animation: pulse 2s ease-in-out infinite;
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.3); }
-  50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--success-glow); }
+  50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(74, 222, 128, 0); }
 }
 
-/* 标题 */
 .welcome-title {
   margin: 0 0 12px;
   font-size: 56px;
   font-weight: 700;
   font-family: var(--font-mono);
-  color: var(--text);
   letter-spacing: -0.04em;
   line-height: 1.1;
 }
@@ -327,7 +363,10 @@ function handleFeature(panel: string) {
 }
 
 .title-accent {
-  color: var(--text-muted);
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .welcome-desc {
@@ -344,24 +383,27 @@ function handleFeature(panel: string) {
   letter-spacing: 0.02em;
 }
 
-/* 技术话语 */
+/* ─── Quote ─── */
 .tech-quote {
   margin-bottom: 36px;
   padding: 20px 24px;
-  background: var(--bg-secondary);
-  border-radius: 12px;
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-lg);
   max-width: 500px;
   margin-left: auto;
   margin-right: auto;
   display: flex;
   gap: 16px;
   text-align: left;
+  box-shadow: var(--shadow-glass);
 }
 
 .quote-icon {
   font-size: 28px;
-  color: var(--text-muted);
+  color: var(--accent);
   line-height: 1;
   flex-shrink: 0;
   opacity: 0.4;
@@ -419,7 +461,7 @@ function handleFeature(panel: string) {
   50% { opacity: 1; }
 }
 
-/* 快速提问 */
+/* ─── Actions ─── */
 .welcome-actions {
   margin-bottom: 36px;
 }
@@ -444,40 +486,44 @@ function handleFeature(panel: string) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 18px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-lg);
   font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-smooth);
   font-family: var(--font-sans);
+  box-shadow: var(--shadow-sm);
 }
 
 .chip-index {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--accent);
   opacity: 0.5;
 }
 
 .action-chip:hover {
-  border-color: var(--text);
+  border-color: var(--accent-light);
   color: var(--text);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .action-chip:hover .chip-index {
   opacity: 1;
 }
 
-/* 功能入口 */
+/* ─── Features ─── */
 .welcome-features {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  gap: 10px;
   max-width: 480px;
   margin: 0 auto;
 }
@@ -486,32 +532,35 @@ function handleFeature(panel: string) {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-smooth);
   text-align: left;
   font-family: inherit;
+  box-shadow: var(--shadow-sm);
 }
 
 .feature-card:hover {
-  border-color: var(--text-muted);
-  background: var(--bg-secondary);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border-color: var(--accent-light);
+  background: rgba(255, 255, 255, 0.85);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
 }
 
 .feature-card:hover .feature-arrow {
   opacity: 1;
   transform: translateX(0);
+  color: var(--accent);
 }
 
 .feature-icon {
-  font-size: 20px;
+  font-size: 22px;
   flex-shrink: 0;
-  opacity: 0.6;
 }
 
 .feature-info {
@@ -544,7 +593,7 @@ function handleFeature(panel: string) {
   flex-shrink: 0;
 }
 
-/* 底部 */
+/* ─── Footer ─── */
 .welcome-footer {
   position: absolute;
   bottom: 24px;
@@ -563,7 +612,7 @@ function handleFeature(panel: string) {
   font-family: var(--font-mono);
 }
 
-/* 侧边装饰面板 */
+/* ─── Side Panels ─── */
 .side-panel {
   position: absolute;
   top: 50%;
@@ -604,7 +653,7 @@ function handleFeature(panel: string) {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   margin-bottom: 10px;
@@ -622,16 +671,17 @@ function handleFeature(panel: string) {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-muted);
-  padding: 2px 7px;
-  border: 1px solid var(--border-light);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: var(--bg);
+  background: rgba(255, 255, 255, 0.5);
   transition: all 0.15s ease;
 }
 
 .side-tag:hover {
-  color: var(--text-secondary);
-  border-color: var(--border);
+  color: var(--accent);
+  border-color: var(--accent-light);
+  background: var(--accent-soft);
 }
 
 .side-flow {
@@ -649,7 +699,7 @@ function handleFeature(panel: string) {
 .flow-num {
   font-family: var(--font-mono);
   font-size: 9px;
-  color: var(--text-muted);
+  color: var(--accent);
   opacity: 0.4;
   flex-shrink: 0;
   width: 16px;
@@ -675,7 +725,7 @@ function handleFeature(panel: string) {
 
 .stat-icon {
   font-size: 14px;
-  opacity: 0.4;
+  opacity: 0.5;
   flex-shrink: 0;
   width: 18px;
   text-align: center;
@@ -724,4 +774,44 @@ function handleFeature(panel: string) {
     display: none;
   }
 }
+
+/* ─── Simple workspace home ─── */
+.welcome-container { min-height: 100%; padding: 48px 32px 36px; background: var(--bg); overflow-y: auto; }
+.welcome-bg, .bg-grid, .bg-glow, .bg-orb { display: none; }
+.side-panel { display: none; }
+.welcome-content { max-width: 1080px; text-align: left; }
+.hero-section { margin-bottom: 28px; }
+.hero-badge { background: var(--accent-soft); border: 0; border-radius: 5px; color: var(--accent); font-family: var(--font-sans); font-weight: 600; padding: 6px 10px; margin-bottom: 18px; }
+.welcome-title { color: var(--text); font: 700 clamp(30px, 4vw, 42px) var(--font-sans); letter-spacing: -.03em; margin-bottom: 12px; }
+.title-main, .title-accent { color: inherit; background: none; -webkit-text-fill-color: initial; }
+.welcome-desc { max-width: 600px; color: var(--text-secondary); font-size: 15px; }
+.desc-highlight { color: var(--text-muted); font-family: var(--font-sans); }
+.welcome-primary { display: inline-flex; align-items: center; gap: 24px; margin-top: 24px; padding: 11px 16px 11px 18px; border: 0; border-radius: 7px; background: var(--accent); color: #fff; font: 600 13px var(--font-sans); cursor: pointer; box-shadow: 0 5px 12px var(--accent-glow); transition: background .2s, transform .2s; }
+.welcome-primary:hover { background: #0958d9; transform: translateY(-1px); }
+.primary-arrow { font-size: 18px; font-weight: 400; line-height: 1; }
+.tech-quote { max-width: none; margin: 0 0 26px; padding: 16px 18px; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-sm); }
+.quote-icon { font-size: 22px; }
+.welcome-actions { margin-bottom: 28px; }
+.section-kicker { margin-bottom: 10px; color: var(--text); font-size: 13px; font-weight: 600; }
+.action-chips { justify-content: flex-start; gap: 10px; }
+.action-chip { padding: 10px 14px; background: #fff; border: 1px solid var(--border); border-radius: 7px; box-shadow: none; }
+.action-chip:hover { background: var(--accent-soft); border-color: #b7d4ff; transform: none; box-shadow: none; }
+.welcome-features { max-width: none; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.feature-card { min-height: 128px; align-items: flex-start; flex-direction: column; gap: 14px; padding: 16px; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-sm); }
+.feature-card:hover { background: #fff; border-color: #9ec5ff; transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.feature-icon { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 7px; background: var(--accent-soft); font-size: 17px; }
+.feature-info { gap: 5px; }
+.feature-name { font: 600 13px var(--font-sans); }
+.feature-desc { font-size: 11px; }
+.feature-arrow { position: absolute; display: none; }
+.welcome-flow { margin-top: 28px; }
+.flow-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.flow-card { display: grid; grid-template-columns: 32px 1fr; column-gap: 10px; padding: 14px 16px; background: #fff; border: 1px solid var(--border); border-radius: 8px; }
+.flow-card span { grid-row: span 2; color: var(--accent); font: 700 12px var(--font-mono); }
+.flow-card strong { font-size: 13px; }
+.flow-card small { margin-top: 4px; color: var(--text-muted); font-size: 11px; }
+.welcome-footer { position: static; margin-top: 28px; }
+.footer-text { font-family: var(--font-sans); }
+@media (max-width: 900px) { .welcome-features { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px) { .welcome-container { padding: 28px 18px; } .welcome-features, .flow-cards { grid-template-columns: 1fr; } .action-chips { flex-direction: column; align-items: stretch; } .action-chip { justify-content: flex-start; } }
 </style>

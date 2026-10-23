@@ -3,8 +3,12 @@
     <!-- 左侧模块列表 -->
     <div class="techguide-sidebar">
       <div class="techguide-sidebar-header">
-        <span class="techguide-sidebar-icon">⊕</span>
+        <span class="techguide-sidebar-icon">🧭</span>
         <span class="techguide-sidebar-title">技术引航图</span>
+        <button class="tg-session-btn" @click="toggleSessionSidebar" title="历史会话">
+          📋
+          <span v-if="sessionList.length > 0" class="tg-session-badge">{{ sessionList.length }}</span>
+        </button>
       </div>
 
       <div class="techguide-modules">
@@ -21,7 +25,6 @@
           </div>
           <div class="module-desc">{{ mod.description }}</div>
 
-          <!-- 知识点标签（展开时显示） -->
           <transition name="expand">
             <div v-if="activeModule?.id === mod.id" class="module-tags">
               <button
@@ -39,19 +42,44 @@
       </div>
     </div>
 
+    <!-- 会话侧边栏 -->
+    <transition name="slide-right">
+      <div v-if="showSessionSidebar" class="tg-session-sidebar">
+        <div class="tg-session-header">
+          <span class="tg-session-title">历史会话</span>
+          <button class="tg-session-new" @click="handleNewSession">+</button>
+        </div>
+        <div class="tg-session-list">
+          <div v-if="sessionList.length === 0" class="tg-session-empty">暂无历史</div>
+          <div
+            v-for="session in sessionList"
+            :key="session.id"
+            class="tg-session-item"
+            :class="{ active: session.id === activeSessionId }"
+            @click="handleSwitchSession(session.id)"
+          >
+            <div class="tg-session-item-title">{{ session.title }}</div>
+            <div class="tg-session-item-time">{{ formatTime(session.updatedAt) }}</div>
+            <button class="tg-session-del" @click.stop="handleDeleteSession(session.id)">×</button>
+          </div>
+        </div>
+        <div class="tg-session-footer" v-if="sessionList.length > 0">
+          <button class="tg-session-clear" @click="handleClearAll">清空所有</button>
+        </div>
+      </div>
+    </transition>
+
     <!-- 右侧教学对话区 -->
     <div class="techguide-main">
-      <!-- 顶部路径 -->
       <div class="techguide-breadcrumb" v-if="activeModule">
         <span class="breadcrumb-module">{{ activeModule.icon }} {{ activeModule.name }}</span>
         <span v-if="activeTag" class="breadcrumb-sep">›</span>
         <span v-if="activeTag" class="breadcrumb-tag">{{ activeTag }}</span>
       </div>
 
-      <!-- 消息区域 -->
       <div class="techguide-messages" ref="messagesRef" @scroll="handleScroll">
-        <!-- 空状态 -->
         <div v-if="messages.length === 0" class="techguide-empty">
+          <div class="empty-glow"></div>
           <div class="empty-icon">🧭</div>
           <div class="empty-title">选择一个模块开始学习</div>
           <div class="empty-desc">从左侧选择学习模块，点击知识点标签即可开始 AI 导师教学</div>
@@ -63,16 +91,14 @@
           </div>
         </div>
 
-        <!-- 消息列表 -->
         <div v-for="(msg, idx) in messages" :key="idx" class="chat-msg" :class="msg.role">
           <span class="prompt-char">{{ msg.role === 'user' ? '>' : '✦' }}</span>
           <div class="msg-body">
             <span v-html="renderMarkdown(msg.content)"></span>
             <span v-if="msg.role === 'assistant' && streaming && idx === messages.length - 1" class="chat-cursor"></span>
 
-            <!-- 推荐追问按钮 -->
             <div v-if="msg.role === 'assistant' && followupsMap[idx]?.length && !streaming" class="followup-section">
-              <div class="followup-hint">👇 想要继续深入吗？点击下方问题，AI 将带你往下深挖：</div>
+              <div class="followup-hint">👇 想要继续深入吗？点击下方问题：</div>
               <div class="followup-chips">
                 <button
                   v-for="(fq, fi) in followupsMap[idx]"
@@ -87,13 +113,11 @@
           </div>
         </div>
 
-        <!-- 加载指示器 -->
         <div v-if="waitingForResponse" class="chat-loading">
           <ThinkingIndicator variant="inline" />
         </div>
       </div>
 
-      <!-- 输入区域 -->
       <div class="chat-input-area" v-if="activeModule">
         <div class="chat-input-row">
           <textarea
@@ -114,7 +138,7 @@
             <span v-if="streaming" class="btn-loading">
               <span class="loading-spinner"></span>
             </span>
-            <span v-else>发送</span>
+            <span v-else class="send-icon">↑</span>
           </button>
         </div>
         <div class="chat-hint">
@@ -131,13 +155,12 @@
           </span>
         </div>
 
-        <!-- 清空确认气泡 -->
         <transition name="fade">
           <div v-if="showClearConfirm" class="clear-confirm-popover">
-            <div class="clear-confirm-text">确定要清空当前对话吗？历史记录将丢失。</div>
+            <div class="clear-confirm-text">确定要清空当前对话吗？</div>
             <div class="clear-confirm-actions">
               <button class="clear-btn clear-btn-cancel" @click="showClearConfirm = false">取消</button>
-              <button class="clear-btn clear-btn-ok" @click="doClearChat">确定清空</button>
+              <button class="clear-btn clear-btn-ok" @click="doClearChat">确定</button>
             </div>
           </div>
         </transition>
@@ -147,12 +170,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, nextTick, onBeforeUnmount } from 'vue'
+import { ref, reactive, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { TechGuideModule, TechGuideMessage } from '../types'
 import ThinkingIndicator from './ThinkingIndicator.vue'
+import { useSessionManager } from '../composables/useSessionManager'
+import { useMarkdown } from '../composables/useMarkdown'
+import { consumeSse } from '../composables/useSseFetch'
 
-// 8 大模块定义
+const { renderMarkdown } = useMarkdown()
+
+const {
+  activeSessionId,
+  activeSession,
+  sessionList,
+  showSessionSidebar,
+  storage,
+  switchSession: switchToSession,
+  createNewSession,
+  deleteSession,
+  clearAllSessions,
+  initSession,
+  toggleSessionSidebar
+} = useSessionManager('techguide')
+
 const modules: TechGuideModule[] = [
   {
     id: 'java',
@@ -220,17 +261,77 @@ const streaming = ref(false)
 const waitingForResponse = ref(false)
 const messagesRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
-const conversationId = ref(`tg-${Date.now()}`)
+const conversationId = ref('')
 const showClearConfirm = ref(false)
 
-// 追问问题映射：messageIndex -> followup[]
 const followupsMap = reactive<Record<number, string[]>>({})
 
-// 智能滚动状态
 let userScrolledUp = false
 let scrollResumeTimer: ReturnType<typeof setTimeout> | null = null
+let streamController: AbortController | null = null
 
-let eventSource: EventSource | null = null
+onMounted(() => {
+  initSession()
+  const session = activeSession.value
+  if (session) {
+    conversationId.value = session.id
+    loadMessagesFromSession(session)
+  } else {
+    conversationId.value = `tg-${Date.now()}`
+  }
+})
+
+watch(activeSessionId, (newId) => {
+  if (!newId) return
+  const session = storage.getSession(newId)
+  if (session) {
+    conversationId.value = session.id
+    loadMessagesFromSession(session)
+    closeStream()
+    streaming.value = false
+    waitingForResponse.value = false
+  }
+})
+
+function loadMessagesFromSession(session: { messages: Array<{ role: string; content: string }> }) {
+  messages.value = session.messages.map(msg => ({
+    role: msg.role as 'user' | 'assistant',
+    content: msg.content,
+  }))
+  scrollToBottom()
+}
+
+function handleNewSession() {
+  const session = createNewSession()
+  conversationId.value = session.id
+  messages.value = []
+  Object.keys(followupsMap).forEach(key => delete followupsMap[Number(key)])
+}
+
+function handleSwitchSession(id: string) {
+  switchToSession(id)
+}
+
+function handleDeleteSession(id: string) {
+  deleteSession(id)
+}
+
+function handleClearAll() {
+  clearAllSessions()
+  messages.value = []
+  Object.keys(followupsMap).forEach(key => delete followupsMap[Number(key)])
+  conversationId.value = `tg-${Date.now()}`
+}
+
+function formatTime(ts: number): string {
+  const d = new Date(ts)
+  const now = new Date()
+  const isToday = d.toDateString() === now.toDateString()
+  if (isToday) {
+    return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  }
+  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+}
 
 function selectModule(mod: TechGuideModule) {
   if (activeModule.value?.id === mod.id) {
@@ -261,13 +362,15 @@ function sendMessage() {
   sendToBackend(msg)
 }
 
-function sendToBackend(msg: string) {
+async function sendToBackend(msg: string) {
   if (!activeModule.value) {
     ElMessage.warning('请先选择一个学习模块')
     return
   }
 
   messages.value = [...messages.value, { role: 'user', content: msg }]
+  storage.addMessage({ role: 'user', content: msg })
+
   messages.value = [...messages.value, { role: 'assistant', content: '' }]
 
   streaming.value = true
@@ -275,61 +378,65 @@ function sendToBackend(msg: string) {
   userScrolledUp = false
   scrollToBottom()
 
-  const url = new URL('/api/techguide/stream', window.location.origin)
-  url.searchParams.set('module', activeModule.value.id)
-  url.searchParams.set('tag', activeTag.value)
-  url.searchParams.set('message', msg)
-  url.searchParams.set('conversationId', conversationId.value)
-
   closeStream()
-  eventSource = new EventSource(url)
-
-  eventSource.onmessage = (event) => {
-    const lastMsg = messages.value[messages.value.length - 1]
-    if (lastMsg && lastMsg.role === 'assistant') {
-      waitingForResponse.value = false
-      lastMsg.content += (lastMsg.content ? '\n' : '') + event.data
-      messages.value = [...messages.value]
-      smartScrollToBottom()
-    }
-  }
-
-  eventSource.addEventListener('followups', (event) => {
-    const data = event.data as string
-    if (data) {
-      const followups = data.split('|||').filter(Boolean)
-      const assistantIdx = messages.value.length - 1
-      followupsMap[assistantIdx] = followups
-    }
-  })
-
-  eventSource.addEventListener('done', () => {
+  const controller = new AbortController()
+  streamController = controller
+  try {
+    await consumeSse('/api/techguide/stream', {
+      module: activeModule.value.id,
+      tag: activeTag.value,
+      message: msg,
+      conversationId: conversationId.value,
+    }, {
+      onMessage: (data) => {
+        const lastMsg = messages.value[messages.value.length - 1]
+        if (lastMsg && lastMsg.role === 'assistant') {
+          waitingForResponse.value = false
+          lastMsg.content += data
+          messages.value = [...messages.value]
+          smartScrollToBottom()
+        }
+      },
+      onFollowups: (data) => {
+        if (data) {
+          const followups = data.split('|||').filter(Boolean)
+          const assistantIdx = messages.value.length - 1
+          followupsMap[assistantIdx] = followups
+        }
+      },
+      onDone: () => {
+        streaming.value = false
+        waitingForResponse.value = false
+        const lastMsg = messages.value[messages.value.length - 1]
+        if (lastMsg && lastMsg.role === 'assistant') {
+          storage.addMessage({ role: 'assistant', content: lastMsg.content })
+        }
+        nextTick(() => inputRef.value?.focus())
+      },
+    }, controller.signal)
+  } catch (error) {
+    if (controller.signal.aborted) return
     streaming.value = false
     waitingForResponse.value = false
-    closeStream()
-    nextTick(() => inputRef.value?.focus())
-  })
-
-  eventSource.onerror = () => {
-    streaming.value = false
-    waitingForResponse.value = false
-    closeStream()
     const lastMsg = messages.value[messages.value.length - 1]
     if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content) {
       lastMsg.content = '⚠️ 连接中断，请稍后重试'
       messages.value = [...messages.value]
     }
+  } finally {
+    if (streamController === controller) {
+      streamController = null
+    }
   }
 }
 
 function closeStream() {
-  if (eventSource) {
-    eventSource.close()
-    eventSource = null
+  if (streamController) {
+    streamController.abort()
+    streamController = null
   }
 }
 
-// === 智能自动滚动 ===
 function handleScroll() {
   if (!messagesRef.value) return
   const el = messagesRef.value
@@ -365,7 +472,6 @@ function scrollToBottom() {
   })
 }
 
-// === 清空对话确认 ===
 function confirmClearChat() {
   showClearConfirm.value = true
 }
@@ -396,31 +502,6 @@ function resetTextareaHeight() {
   }
 }
 
-function renderMarkdown(text: string): string {
-  if (!text) return ''
-  let html = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, lang, code) => {
-    const langLabel = lang ? `<div class="code-lang">${lang}</div>` : ''
-    return `<div class="code-block-wrapper">${langLabel}<pre class="code-block"><code>${code}</code></pre></div>`
-  })
-  html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
-  html = html.replace(/^### (.+)$/gm, '<h4 class="md-h4">$1</h4>')
-  html = html.replace(/^## (.+)$/gm, '<h3 class="md-h3">$1</h3>')
-  html = html.replace(/^# (.+)$/gm, '<h2 class="md-h2">$1</h2>')
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-  html = html.replace(/^- (.+)$/gm, '<div class="md-li">• $1</div>')
-  html = html.replace(/^\d+\. (.+)$/gm, '<div class="md-oli">$1</div>')
-  html = html.replace(/((?:^.*[─│┌┐└┘┬┴├┤┼╔╗╚╝═║╠╣╦╩╬].*\n?){3,})/gm, '<pre class="ascii-diagram">$1</pre>')
-  html = html.replace(/\n/g, '<br>')
-
-  return html
-}
-
 onBeforeUnmount(() => {
   closeStream()
   if (scrollResumeTimer) clearTimeout(scrollResumeTimer)
@@ -432,12 +513,17 @@ onBeforeUnmount(() => {
   display: flex;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
 
+/* ─── Sidebar ─── */
 .techguide-sidebar {
   width: 280px;
   min-width: 280px;
-  border-right: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid rgba(255, 255, 255, 0.5);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -445,7 +531,7 @@ onBeforeUnmount(() => {
 
 .techguide-sidebar-header {
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-light);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -462,6 +548,43 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text);
+  flex: 1;
+}
+
+.tg-session-btn {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-glass);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all var(--transition-fast);
+}
+
+.tg-session-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.tg-session-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .techguide-modules {
@@ -472,19 +595,19 @@ onBeforeUnmount(() => {
 
 .module-card {
   padding: 12px 14px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-normal);
   margin-bottom: 4px;
   border-left: 3px solid transparent;
 }
 
 .module-card:hover {
-  background: var(--bg-hover);
+  background: var(--accent-soft);
 }
 
 .module-card.active {
-  background: var(--bg-hover);
+  background: linear-gradient(135deg, var(--accent-soft), rgba(36, 86, 230, 0.15));
   border-left-color: var(--accent);
 }
 
@@ -525,10 +648,10 @@ onBeforeUnmount(() => {
 .module-tag {
   font-family: var(--font-mono);
   font-size: 11px;
-  padding: 3px 8px;
+  padding: 3px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-glass);
   color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -536,31 +659,181 @@ onBeforeUnmount(() => {
 
 .module-tag:hover {
   border-color: var(--accent);
-  color: var(--text);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .module-tag.active {
-  background: var(--accent);
-  color: var(--bg);
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  color: #fff;
   border-color: var(--accent);
+  box-shadow: 0 2px 8px var(--accent-glow);
 }
 
-.techguide-main {
-  flex: 1;
+/* ─── Session Sidebar ─── */
+.tg-session-sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255, 255, 255, 0.6);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
+.tg-session-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tg-session-title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tg-session-new {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-glass);
+  color: var(--accent);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tg-session-new:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.tg-session-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.tg-session-empty {
+  text-align: center;
+  padding: 30px 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.tg-session-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  margin-bottom: 2px;
+}
+
+.tg-session-item:hover {
+  background: var(--accent-soft);
+}
+
+.tg-session-item.active {
+  background: linear-gradient(135deg, var(--accent-soft), rgba(36, 86, 230, 0.18));
+  border-left: 3px solid var(--accent);
+}
+
+.tg-session-item-title {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tg-session-item-time {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.tg-session-del {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-fast);
+}
+
+.tg-session-item:hover .tg-session-del {
+  opacity: 1;
+}
+
+.tg-session-del:hover {
+  background: var(--error-soft);
+  color: var(--error);
+}
+
+.tg-session-footer {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-light);
+}
+
+.tg-session-clear {
+  width: 100%;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tg-session-clear:hover {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* ─── Main Area ─── */
+.techguide-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
 .techguide-breadcrumb {
   padding: 12px 20px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-light);
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 8px;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .breadcrumb-module {
@@ -574,6 +847,7 @@ onBeforeUnmount(() => {
 
 .breadcrumb-tag {
   color: var(--accent);
+  font-weight: 500;
 }
 
 .techguide-messages {
@@ -589,12 +863,25 @@ onBeforeUnmount(() => {
   justify-content: center;
   height: 100%;
   text-align: center;
+  position: relative;
+}
+
+.empty-glow {
+  position: absolute;
+  width: 250px;
+  height: 250px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-soft) 0%, transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
 }
 
 .empty-icon {
   font-size: 48px;
   margin-bottom: 16px;
-  opacity: 0.6;
+  opacity: 0.7;
+  position: relative;
+  z-index: 1;
 }
 
 .empty-title {
@@ -603,6 +890,8 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: var(--text);
   margin-bottom: 8px;
+  position: relative;
+  z-index: 1;
 }
 
 .empty-desc {
@@ -611,6 +900,8 @@ onBeforeUnmount(() => {
   max-width: 320px;
   line-height: 1.6;
   margin-bottom: 24px;
+  position: relative;
+  z-index: 1;
 }
 
 .empty-modules {
@@ -618,32 +909,40 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
+  position: relative;
+  z-index: 1;
 }
 
 .empty-module-chip {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-normal);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .empty-module-chip:hover {
   border-color: var(--accent);
-  color: var(--text);
+  color: var(--accent);
+  background: var(--accent-soft);
+  transform: translateY(-2px);
 }
 
+/* ─── Messages ─── */
 .chat-msg {
   display: flex;
   gap: 10px;
   margin-bottom: 16px;
-  animation: slideInUp 0.2s ease;
+  animation: msgSlideIn 0.3s ease;
 }
 
 .chat-msg.user {
@@ -657,9 +956,13 @@ onBeforeUnmount(() => {
 .prompt-char {
   font-family: var(--font-mono);
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--accent);
   user-select: none;
   min-width: 14px;
+}
+
+.chat-msg.assistant .prompt-char {
+  color: var(--accent);
 }
 
 .msg-body {
@@ -705,8 +1008,8 @@ onBeforeUnmount(() => {
   font-family: var(--font-mono);
   font-size: 10px;
   padding: 2px 8px;
-  background: var(--border);
-  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
   border-radius: 0 var(--radius-sm) 0 var(--radius-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -714,7 +1017,7 @@ onBeforeUnmount(() => {
 
 .msg-body :deep(.code-block) {
   background: #1e1e2e;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-sm);
   padding: 14px 16px;
   font-family: var(--font-mono);
@@ -727,12 +1030,13 @@ onBeforeUnmount(() => {
 }
 
 .msg-body :deep(.inline-code) {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-light);
-  border-radius: 3px;
-  padding: 1px 5px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(36, 86, 230, 0.12);
+  border-radius: 4px;
+  padding: 1px 6px;
   font-family: var(--font-mono);
   font-size: 12px;
+  color: var(--accent);
 }
 
 .msg-body :deep(.ascii-diagram) {
@@ -778,21 +1082,22 @@ onBeforeUnmount(() => {
   font-family: var(--font-mono);
   font-size: 12px;
   padding: 6px 14px;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--accent-light);
   border-radius: 20px;
-  background: transparent;
+  background: var(--accent-soft);
   color: var(--accent);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-normal);
   line-height: 1.4;
   text-align: left;
 }
 
 .followup-chip:hover {
-  background: var(--accent);
-  color: var(--bg);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  color: #fff;
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--accent-glow);
 }
 
 .followup-chip:active {
@@ -803,10 +1108,11 @@ onBeforeUnmount(() => {
   display: inline-block;
   width: 2px;
   height: 14px;
-  background: var(--text);
+  background: var(--accent);
   margin-left: 2px;
   vertical-align: text-bottom;
   animation: blink 1s step-end infinite;
+  border-radius: 1px;
 }
 
 @keyframes blink {
@@ -819,10 +1125,14 @@ onBeforeUnmount(() => {
   padding: 8px 0;
 }
 
+/* ─── Input ─── */
 .chat-input-area {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-light);
   padding: 12px 20px;
   position: relative;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .chat-input-row {
@@ -836,19 +1146,20 @@ onBeforeUnmount(() => {
   font-family: var(--font-sans);
   font-size: 14px;
   padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.85);
   color: var(--text);
   resize: none;
   outline: none;
-  transition: border-color var(--transition-fast);
+  transition: all var(--transition-normal);
   min-height: 40px;
   max-height: 120px;
 }
 
 .chat-input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .chat-input::placeholder {
@@ -858,23 +1169,35 @@ onBeforeUnmount(() => {
 .chat-send-btn {
   font-family: var(--font-mono);
   font-size: 13px;
-  padding: 10px 18px;
-  background: var(--accent);
-  color: var(--bg);
+  padding: 10px 14px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  color: #fff;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-normal);
   white-space: nowrap;
+  box-shadow: 0 2px 8px var(--accent-glow);
+  min-width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .chat-send-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px var(--accent-glow);
 }
 
 .chat-send-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  box-shadow: none;
+}
+
+.send-icon {
+  font-weight: 700;
+  font-size: 16px;
 }
 
 .btn-loading {
@@ -888,7 +1211,7 @@ onBeforeUnmount(() => {
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: var(--bg);
+  border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -909,9 +1232,9 @@ onBeforeUnmount(() => {
 
 .hint-key {
   padding: 1px 5px;
-  border: 1px solid var(--border-light);
-  border-radius: 3px;
-  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-glass);
 }
 
 .hint-clear {
@@ -920,8 +1243,8 @@ onBeforeUnmount(() => {
 }
 
 .hint-clear:hover {
-  border-color: #e74c3c;
-  color: #e74c3c;
+  border-color: var(--error);
+  color: var(--error);
 }
 
 .hint-divider {
@@ -934,11 +1257,13 @@ onBeforeUnmount(() => {
   left: 20px;
   right: 20px;
   margin-bottom: 8px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-md);
   padding: 14px 18px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-float);
   z-index: 10;
 }
 
@@ -962,11 +1287,11 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
 }
 
 .clear-btn-cancel {
-  background: var(--bg);
+  background: var(--bg-glass);
   color: var(--text-secondary);
 }
 
@@ -975,15 +1300,16 @@ onBeforeUnmount(() => {
 }
 
 .clear-btn-ok {
-  background: #e74c3c;
+  background: var(--error);
   color: #fff;
-  border-color: #e74c3c;
+  border-color: var(--error);
 }
 
 .clear-btn-ok:hover {
-  background: #c0392b;
+  opacity: 0.9;
 }
 
+/* ─── Transitions ─── */
 .expand-enter-active,
 .expand-leave-active {
   transition: all 0.2s ease;
@@ -1014,7 +1340,18 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 
-@keyframes slideInUp {
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.slide-right-enter-from,
+.slide-right-leave-to {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+@keyframes msgSlideIn {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -1024,4 +1361,9 @@ onBeforeUnmount(() => {
     transform: translateY(0);
   }
 }
+
+/* ─── Light documentation surface ─── */
+.techguide-sidebar, .tg-session-sidebar { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; border-color: var(--border); }
+.msg-body :deep(.code-block) { background: #f6f8fb; border-color: var(--border); color: var(--text); }
+.msg-body :deep(.code-lang) { background: var(--accent-soft); color: var(--accent); }
 </style>

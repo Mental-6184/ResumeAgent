@@ -73,7 +73,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   font-family: var(--font-mono);
-  color: var(--text-muted);
+  color: var(--accent);
   animation: fadeInOut 2s ease-in-out infinite;
   white-space: nowrap;
 }

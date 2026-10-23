@@ -1,17 +1,22 @@
 package com.resumeagent.service;
 
+import com.resumeagent.config.ResumeAgentProperties;
 import com.resumeagent.dto.KnowledgeSearchItem;
 import com.resumeagent.model.ConversationMessage;
 import com.resumeagent.model.SafetyVerdict;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -24,7 +29,9 @@ public class TechGuideService {
     private final SafetyService safetyService;
     private final LlmService llmService;
     private final AuditService auditService;
-    private final Map<String, List<ConversationMessage>> conversationStore = new ConcurrentHashMap<>();
+    private final ConversationStore conversationStore;
+    private final ResumeAgentProperties properties;
+    private final Executor streamExecutor;
 
     /** 模块名称映射，用于构建系统提示词 */
     private static final Map<String, String> MODULE_NAMES = Map.ofEntries(
@@ -42,15 +49,43 @@ public class TechGuideService {
                             SafetyService safetyService,
                             LlmService llmService,
                             AuditService auditService) {
+        this(knowledgeBaseService, safetyService, llmService, auditService,
+                new ResumeAgentProperties(), new ConversationStore(new ResumeAgentProperties()), Runnable::run);
+    }
+
+    @Autowired
+    public TechGuideService(KnowledgeBaseService knowledgeBaseService,
+                            SafetyService safetyService,
+                            LlmService llmService,
+                            AuditService auditService,
+                            ResumeAgentProperties properties,
+                            ConversationStore conversationStore,
+                            @Qualifier("streamTaskExecutor") Executor streamExecutor) {
         this.knowledgeBaseService = knowledgeBaseService;
         this.safetyService = safetyService;
         this.llmService = llmService;
         this.auditService = auditService;
+        this.properties = properties;
+        this.conversationStore = conversationStore;
+        this.streamExecutor = streamExecutor;
     }
 
     public SseEmitter stream(String module, String tag, String message, String conversationId) {
-        SseEmitter emitter = new SseEmitter(0L);
-        CompletableFuture.runAsync(() -> {
+        SseEmitter emitter = new SseEmitter(properties.getStream().getTimeoutMs());
+        AtomicReference<Future<?>> taskRef = new AtomicReference<>();
+        Runnable cancelTask = () -> {
+            Future<?> task = taskRef.get();
+            if (task != null) {
+                task.cancel(true);
+            }
+        };
+        emitter.onCompletion(cancelTask);
+        emitter.onTimeout(() -> {
+            cancelTask.run();
+            emitter.complete();
+        });
+        emitter.onError(error -> cancelTask.run());
+        Future<?> task = CompletableFuture.runAsync(() -> {
             try {
                 // 1. 安全检查
                 SafetyVerdict verdict = safetyService.inspect(message);
@@ -78,21 +113,36 @@ public class TechGuideService {
                         .map(m -> Map.of("role", m.role(), "content", m.content()))
                         .toList();
 
-                // 6. 调用 LLM 生成
-                String reply = llmService.generate(systemPrompt, userPrompt, historyMessages)
-                        .orElseGet(() -> buildFallbackAnswer(moduleName, tag, contexts));
+                // 6. 真流式生成：增量 delta 实时转发，<FOLLOWUP> 块由过滤器从正文中剔除
+                FollowupFilter followupFilter = new FollowupFilter();
+                StringBuilder replyBuilder = new StringBuilder();
+                Optional<String> generated = llmService.generateStream(systemPrompt, userPrompt, historyMessages, delta -> {
+                    replyBuilder.append(delta);
+                    for (String piece : followupFilter.push(delta)) {
+                        try {
+                            emitter.send(piece);
+                        } catch (Exception exception) {
+                            throw new CompletionException(exception);
+                        }
+                    }
+                });
 
-                // 7. 提取追问问题并从主内容中移除
+                // 7. LLM 不可用时补发降级回答
+                if (generated.isEmpty()) {
+                    String fallback = buildFallbackAnswer(moduleName, tag, contexts);
+                    replyBuilder.append(fallback);
+                    emitter.send(fallback);
+                }
+                for (String piece : followupFilter.flush()) {
+                    emitter.send(piece);
+                }
+
+                // 8. 提取追问问题（正文已在流式输出中剔除 <FOLLOWUP> 块）
+                String reply = replyBuilder.toString();
                 List<String> followups = extractFollowups(reply);
                 String cleanReply = removeFollowupBlock(reply);
 
-                // 8. 流式输出（复用 ChatService 的分块策略）
-                for (String chunk : splitIntoChunks(cleanReply)) {
-                    emitter.send(chunk);
-                    Thread.sleep(80L);
-                }
-
-                // 9. 发送追问问题（JSON 数组格式）
+                // 9. 发送追问问题（||| 分隔）
                 if (!followups.isEmpty()) {
                     String followupJson = String.join("|||", followups);
                     emitter.send(SseEmitter.event().name("followups").data(followupJson));
@@ -112,7 +162,8 @@ public class TechGuideService {
                 LOGGER.error("TechGuide stream error", exception);
                 emitter.completeWithError(exception);
             }
-        });
+        }, streamExecutor);
+        taskRef.set(task);
         return emitter;
     }
 
@@ -294,12 +345,15 @@ public class TechGuideService {
     }
 
     private List<ConversationMessage> historyMessages(String conversationId) {
-        return conversationStore.getOrDefault(conversationId, Collections.emptyList());
+        return conversationStore.history("techguide", conversationId);
     }
 
     private void appendMessage(String conversationId, String role, String content) {
-        conversationStore.computeIfAbsent(conversationId, key -> new CopyOnWriteArrayList<>())
-                .add(new ConversationMessage(role, content));
+        conversationStore.append("techguide", conversationId, role, content);
+    }
+
+    public int activeConversationCount() {
+        return conversationStore.activeCount();
     }
 
     private List<KnowledgeSearchItem> deduplicateItems(List<KnowledgeSearchItem> items) {
@@ -312,20 +366,6 @@ public class TechGuideService {
             }
         }
         return result.size() > 8 ? result.subList(0, 8) : result;
-    }
-
-    private List<String> splitIntoChunks(String reply) {
-        List<String> chunks = new ArrayList<>();
-        String[] lines = reply.split("\n");
-        for (String line : lines) {
-            if (!line.isBlank()) {
-                chunks.add(line);
-            }
-        }
-        if (chunks.isEmpty()) {
-            chunks.add(reply);
-        }
-        return chunks;
     }
 
     /**

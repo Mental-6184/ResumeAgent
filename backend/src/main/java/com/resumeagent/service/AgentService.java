@@ -192,6 +192,14 @@ public class AgentService {
                     matchedProjects.get(0).name()));
         }
         suggestions.add("针对岗位要求准备 2-3 个技术难点案例，使用 STAR 法则组织，包含具体的问题描述、解决方案和量化成果");
+        if (!missingKeywords.isEmpty()) {
+            List<String> topMissing = missingKeywords.stream().limit(3).toList();
+            suggestions.add("补齐岗位要求中的 " + String.join("、", topMissing)
+                    + "：结合现有项目做一个小型实践并写进简历对应条目");
+        } else {
+            suggestions.add("在简历中为每段经历补充量化成果（性能提升、规模、准确率），提升初筛通过率");
+        }
+        suggestions.add("研究目标岗位的业务场景，准备 1-2 个『如果由你来设计』的开放题回答，展示思考深度");
 
         auditService.record("agent-analyze", null, verdict.sanitizedText(), String.valueOf(matchScore), verdict.reason());
         return new JobAnalyzeResponse(request.jobTitle(), matchScore, strengths, gaps, suggestions);

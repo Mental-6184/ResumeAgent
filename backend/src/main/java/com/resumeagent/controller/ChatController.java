@@ -5,10 +5,10 @@ import com.resumeagent.dto.ChatResponse;
 import com.resumeagent.dto.ConversationMessageResponse;
 import com.resumeagent.service.ChatService;
 import jakarta.validation.Valid;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import com.resumeagent.service.StreamMetrics;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,9 +23,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class ChatController {
 
     private final ChatService chatService;
+    private final StreamMetrics streamMetrics;
 
-    public ChatController(ChatService chatService) {
+    public ChatController(ChatService chatService, StreamMetrics streamMetrics) {
         this.chatService = chatService;
+        this.streamMetrics = streamMetrics;
     }
 
     @PostMapping
@@ -33,11 +35,22 @@ public class ChatController {
         return chatService.chat(request);
     }
 
-    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter stream(@RequestParam String message,
-                             @RequestParam(defaultValue = "default") String conversationId,
-                             @RequestParam(defaultValue = "rag") String mode) {
-        return chatService.stream(new ChatRequest(conversationId, message, mode));
+    @PostMapping(value = "/stream", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter stream(@Valid @RequestBody ChatRequest request) {
+        if (!streamMetrics.tryAcquire()) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "流式请求过多，请稍后重试");
+        }
+        try {
+            SseEmitter emitter = chatService.stream(request);
+            emitter.onCompletion(streamMetrics::release);
+            emitter.onTimeout(streamMetrics::release);
+            emitter.onError(error -> streamMetrics.release());
+            return emitter;
+        } catch (RuntimeException exception) {
+            streamMetrics.release();
+            throw exception;
+        }
     }
 
     @GetMapping("/history")

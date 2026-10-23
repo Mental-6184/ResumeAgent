@@ -589,11 +589,14 @@ function escapeHtml(str: string): string {
   gap: 14px;
   padding: 18px 20px;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-smooth);
   animation: cardFadeIn 0.35s ease both;
+  box-shadow: var(--shadow-sm);
 }
 
 @keyframes cardFadeIn {
@@ -608,9 +611,15 @@ function escapeHtml(str: string): string {
 }
 
 .project-card:hover {
-  border-color: var(--text);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  transform: translateY(-2px);
+  border-color: var(--accent-light);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.project-card:hover .project-card-arrow {
+  color: var(--accent);
+  transform: translateX(3px);
 }
 
 .project-card-icon {
@@ -621,7 +630,8 @@ function escapeHtml(str: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-secondary);
+  background: var(--accent-soft);
+  border: 1px solid rgba(36, 86, 230, 0.12);
   border-radius: 10px;
 }
 
@@ -660,13 +670,13 @@ function escapeHtml(str: string): string {
 
 .mini-tag {
   display: inline-block;
-  padding: 1px 7px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-light);
-  border-radius: 3px;
+  padding: 2px 8px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(36, 86, 230, 0.12);
+  border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 10.5px;
-  color: var(--text-secondary);
+  color: var(--accent);
 }
 
 .project-card-arrow {
@@ -674,11 +684,6 @@ function escapeHtml(str: string): string {
   font-size: 16px;
   color: var(--text-muted);
   transition: transform 0.2s ease, color 0.2s ease;
-}
-
-.project-card:hover .project-card-arrow {
-  color: var(--text);
-  transform: translateX(3px);
 }
 
 /* ─── Detail View ─── */
@@ -700,14 +705,14 @@ function escapeHtml(str: string): string {
 .back-btn {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--accent);
   cursor: pointer;
   transition: color 0.15s;
   margin-right: 8px;
 }
 
 .back-btn:hover {
-  color: var(--text);
+  color: var(--accent-light);
 }
 
 .panel-header.has-back::before {
@@ -731,7 +736,8 @@ function escapeHtml(str: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-secondary);
+  background: var(--accent-soft);
+  border: 1px solid rgba(36, 86, 230, 0.15);
   border-radius: 14px;
   flex-shrink: 0;
 }

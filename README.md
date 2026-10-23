@@ -54,7 +54,7 @@
 
 ResumeAgent 是一个基于 **Spring Boot 3 + Vue3 + RAG + Agent** 构建的个人 AI 简历助手系统。
 
-系统将你的简历、项目文档、技术博客、GitHub 项目说明等个人资料导入知识库，通过 **RAG（检索增强生成）** 技术检索相关上下文，结合 LLM 生成**准确、可追溯**的回答。所有个人数据均从知识库动态检索，**零硬编码**，确保回答始终基于最新资料。同时内置 Agent 能力，支持岗位匹配分析、技能图谱总结、面试回答生成等高级功能。
+系统将你的简历、项目文档、技术博客、GitHub 项目说明等个人资料导入知识库，通过 **RAG（检索增强生成）** 技术检索相关上下文，结合 LLM 生成**准确、可追溯**的回答。个人资料均从知识库动态检索，不在代码中硬编码，确保回答始终基于最新资料。同时内置 Agent 能力，支持岗位匹配分析、技能图谱总结、面试回答生成等高级功能。
 
 > 🎯 **适用场景**：求职面试准备、个人技术品牌展示、项目经历梳理、能力盘点与职业规划。
 
@@ -113,9 +113,9 @@ ResumeAgent 是一个基于 **Spring Boot 3 + Vue3 + RAG + Agent** 构建的个�
 
 | 类型 | 格式 | 内容 |
 |:---|:---:|:---|
-| 📄 简历 | PDF / Word / TXT | 个人基本信息、教育、经历 |
+| 📄 简历 | PDF / TXT / MD | 个人基本信息、教育、经历 |
 | 📁 项目文档 | Markdown / TXT | 项目架构、技术方案、成果 |
-| 📝 技术博客 | Markdown / HTML / TXT | 技术文章、学习笔记 |
+| 📝 技术博客 | Markdown / TXT | 技术文章、学习笔记 |
 | 🐙 GitHub 说明 | Markdown | 项目 README、文档 |
 
 **核心流程**：
@@ -146,6 +146,10 @@ Agent 提供四类高级能力，不只是简单问答：
 | 📊 **技能分析** | 总结擅长方向、技术深度与覆盖面 | "帮我总结一下我的技术优势和短板" |
 | 🎤 **面试回答** | 针对面试问题生成个性化回答 | "如果面试官问你项目难点，怎么回答？" |
 
+### 📌 岗位工作区
+
+将岗位信息、JD、匹配报告、定制简历建议、岗位专属面试和复盘记录集中到同一条岗位记录中，支持看板/列表视图以及收藏、准备、已投递、笔试、面试、Offer 等状态跟踪。岗位数据持久化到 `backend/data/jobs/`，不会覆盖原始档案。
+
 ### 🧭 技术引航图
 
 交互式技术学习引导系统，以"AI 导师"角色讲解核心知识点。
@@ -158,7 +162,7 @@ Agent 提供四类高级能力，不只是简单问答：
 | 🌿 **Spring 生态** | 框架核心与 Web 开发 | IoC、AOP、自动配置、Spring Security |
 | 🗄️ **数据库与缓存** | SQL、ORM 与缓存策略 | MySQL 索引、Redis 缓存、分库分表 |
 | 🔍 **RAG 核心技术** | 检索增强生成全链路 | 文本切片、向量检索、混合排序 |
-| 🤖 **Agent 架构** | 智能体设计与工具调用 | ReAct、Tool Calling、MCP 协议 |
+| 🤖 **Agent 架构** | 服务编排、检索与分析 | 意图路由、上下文管理、RAG 分析 |
 | 🔒 **安全机制** | Web 安全与 AI 安全 | Prompt Injection、PII 脱敏 |
 | 📄 **实战:ResumeAgent** | 本项目源码精讲 | 项目架构、RAG 流水线、Agent 实现 |
 | 📈 **实战:FundPilot** | 基金分析平台精讲 | 技术架构、核心功能、项目亮点 |
@@ -181,7 +185,7 @@ Agent 提供四类高级能力，不只是简单问答：
 |:---|:---|:---|
 | 🛡️ **Prompt Injection 检测** | 识别恶意注入攻击 | 正则匹配中英文攻击模式（"忽略之前指令"、"泄露系统提示词"等） |
 | 🔒 **PII 信息脱敏** | 保护个人敏感信息 | 自动识别并脱敏手机号、邮箱、身份证号 |
-| 📋 **对话审计日志** | 全链路交互追踪 | 记录用户输入、检索片段、模型输出、工具调用 |
+| 📋 **对话审计日志** | 全链路交互追踪 | 记录用户输入、检索片段和模型输出（管理员 Token 保护） |
 
 ### 📡 SSE 流式对话
 
@@ -297,7 +301,7 @@ flowchart TB
 | 控制器层 | REST API 端点、请求路由 | ChatController、AgentController、RagController、SystemController |
 | 服务层 | 核心业务逻辑、RAG 流水线编排 | ChatService、AgentService、KnowledgeBaseService |
 | 安全层 | 注入检测、PII 脱敏、审计记录 | SafetyService、AuditService |
-| 存储层 | 向量存储、对话缓存、日志持久化 | 内存存储（可扩展为 Milvus） |
+| 存储层 | 向量存储、对话缓存、用户资产落盘 | 内存向量存储 + `backend/data/` JSON 持久化（可扩展为 Milvus） |
 | 外部层 | LLM 推理能力 | OpenAI 兼容 API |
 | 优化层 | 对话质量优化、历史管理、上下文感知 | 滑动窗口、追问继承、阶段感知、关键词提取 |
 
@@ -360,7 +364,7 @@ flowchart TB
 上传文件
   │
   ▼
-文本解析（PDF/Word/Markdown/TXT）
+文本解析（PDF/Markdown/TXT）
   │
   ▼
 文本清洗（去除噪音、规范化）
@@ -406,12 +410,12 @@ ChatService 是整个系统的**中枢**，负责编排完整的 RAG 流水线�
 
 ### 3. EmbeddingService — 向量化引擎
 
-基于哈希的嵌入实现（128 维），专为本地开发设计：
+默认使用基于哈希的嵌入实现（128 维），配置 `ZHIPU_BASE_URL`、`ZHIPU_API_KEY` 和 `ZHIPU_EMBEDDING_MODEL` 后优先调用 OpenAI 兼容的 `/embeddings` 接口：
 
 - 支持 CJK（中日韩）和 ASCII 分词
 - 支持 n-gram 特征提取
-- 无需外部 Embedding 服务，零依赖启动
-- 可替换为真实模型（OpenAI Embedding、BGE 等）
+- 未配置或远程调用失败时自动降级为本地哈希向量，保证零依赖启动
+- 向量维度由远程模型决定；切换模型后需要重新启动并重新加载知识库
 
 ### 4. LlmService — LLM 调用客户端
 
@@ -458,17 +462,21 @@ OpenAI 兼容 API 客户端：
 | 方法 | 路径 | 说明 |
 |:---:|:---|:---|
 | `POST` | `/api/chat` | 普通问答，返回完整回答 |
-| `GET` | `/api/chat/stream` | SSE 流式问答，逐行返回 |
+| `POST` | `/api/chat/stream` | JSON 请求的 SSE 流式问答，逐行返回 |
 | `GET` | `/api/chat/history` | 获取指定会话的历史消息 |
 
 **请求参数**：
 
 ```json
 {
+  "conversationId": "session-id",
   "message": "介绍一下你的项目经历",
-  "conversationId": "optional-session-id"
+  "mode": "rag",
+  "jobTitle": "Java 后端开发工程师"
 }
 ```
+
+`conversationId` 和 `message` 必填，`mode` 可选，缺省为 `rag`；岗位工作区发起岗位面试时可传 `jobTitle`。流式请求使用 `Content-Type: application/json`，响应为 `text/event-stream`。
 
 **响应示例**：
 
@@ -486,10 +494,16 @@ OpenAI 兼容 API 客户端：
 
 | 方法 | 路径 | 说明 |
 |:---:|:---|:---|
-| `POST` | `/api/agent/analyze` | 岗位匹配分析 |
+| `POST` | `/api/agent/analyze` | 岗位匹配分析（快速） |
+| `POST` | `/api/agent/match-report` | 简历/JD 深度匹配报告（逐条 JD 要求 + 维度分 + 简历修改建议） |
 | `POST` | `/api/agent/project-query` | 项目查询 |
 | `POST` | `/api/agent/skill-analysis` | 技能分析 |
 | `POST` | `/api/agent/interview-answer` | 面试回答生成 |
+| `GET` | `/api/agent/tech-quote` | 每日技术语录 |
+| `POST` | `/api/agent/interview-reviews` | 生成并存档一场模拟面试复盘 |
+| `GET` | `/api/agent/interview-reviews` | 复盘存档列表（多场对比） |
+| `GET` | `/api/agent/interview-reviews/{id}` | 单场复盘详情 |
+| `DELETE` | `/api/agent/interview-reviews/{id}` | 删除复盘存档 |
 
 **岗位匹配请求示例**：
 
@@ -515,14 +529,40 @@ OpenAI 兼容 API 客户端：
 
 | 方法 | 路径 | 说明 |
 |:---:|:---|:---|
-| `POST` | `/api/rag/ingest` | 上传文件，解析入库 |
+| `POST` | `/api/rag/ingest` | 文本切片入库（调试用） |
 | `GET` | `/api/rag/search` | 检索知识片段（调试用） |
+| `GET` | `/api/rag/documents` | 文档列表（内置/上传标记） |
+| `POST` | `/api/rag/documents` | 粘贴文本保存为文档（落盘持久化） |
+| `DELETE` | `/api/rag/documents/{sourceName}` | 删除上传文档（内置文档只读） |
+| `POST` | `/api/rag/upload` | 上传文件（PDF/TXT/MD）解析入库并落盘 |
+
+### 用户档案接口
+
+| 方法 | 路径 | 说明 |
+|:---:|:---|:---|
+| `GET` | `/api/profile/templates` | 模板列表 |
+| `POST` | `/api/profile/templates` | 新建模板（网申表单 + 简历文本） |
+| `PUT` | `/api/profile/templates/{id}` | 更新模板 |
+| `DELETE` | `/api/profile/templates/{id}` | 删除模板 |
+| `POST` | `/api/profile/templates/{id}/activate` | 激活/切换模板（同步为「我的档案」） |
+| `GET` | `/api/profile/active` | 当前激活模板 |
+| `GET` | `/api/profile/templates/{id}/versions` | 版本历史列表 |
+| `GET` | `/api/profile/templates/{id}/versions/{ts}` | 版本快照预览 |
+| `POST` | `/api/profile/templates/{id}/versions/{ts}/rollback` | 回滚到指定版本 |
+| `POST` | `/api/profile/upload` | 上传简历（PDF/TXT/MD）解析文本 |
+
+### 导出接口
+
+| 方法 | 路径 | 说明 |
+|:---:|:---|:---|
+| `POST` | `/api/export/resume` | 导出简历优化版（PDF/Markdown，`X-Export-Format` 头反映实际格式） |
+| `POST` | `/api/export/interview` | 导出面试问答集与复盘（PDF/Markdown） |
 
 ### 技术引航图接口
 
 | 方法 | 路径 | 说明 |
 |:---:|:---|:---|
-| `GET` | `/api/techguide/stream` | SSE 流式教学对话，逐行返回 |
+| `POST` | `/api/techguide/stream` | JSON 请求的 SSE 流式教学对话 |
 
 **请求参数**：
 
@@ -531,7 +571,18 @@ OpenAI 兼容 API 客户端：
 | `module` | String | ✅ | 模块 ID（java/spring/database/rag/agent/security/resume-agent/fundpilot） |
 | `tag` | String | ❌ | 知识点标签 |
 | `message` | String | ✅ | 用户消息 |
-| `conversationId` | String | ❌ | 会话 ID，多轮对话时传入 |
+| `conversationId` | String | ✅ | 会话 ID，用于维护上下文 |
+
+请求示例：
+
+```json
+{
+  "module": "java",
+  "tag": "HashMap",
+  "message": "请解释这个知识点",
+  "conversationId": "tech-session-id"
+}
+```
 
 **SSE 事件类型**：
 
@@ -541,17 +592,32 @@ OpenAI 兼容 API 客户端：
 | `followups` | `问题1\|\|\|问题2\|\|\|问题3` | AI 生成的推荐追问（`\|\|\|` 分隔） |
 | `done` | `[DONE]` | 流式输出结束 |
 
+### 岗位工作区接口
+
+岗位工作区将岗位 JD、匹配报告、定制简历建议和面试复盘关联到同一条岗位记录，数据持久化到 `backend/data/jobs/`。
+
+| 方法 | 路径 | 说明 |
+|:---:|:---|:---|
+| `GET` | `/api/jobs` | 岗位列表，支持 `status` 和 `q` 筛选 |
+| `POST` | `/api/jobs` | 创建岗位 |
+| `GET/PUT/DELETE` | `/api/jobs/{id}` | 查看、编辑、删除岗位 |
+| `PATCH` | `/api/jobs/{id}/status` | 更新投递状态 |
+| `POST` | `/api/jobs/{id}/match-report` | 生成并保存岗位匹配报告 |
+| `POST/PUT` | `/api/jobs/{id}/resume-draft` | 生成或保存定制简历建议 |
+| `GET/POST/DELETE` | `/api/jobs/{id}/reviews` | 查看、关联、解除面试复盘 |
+
 ### 审计接口
 
 | 方法 | 路径 | 说明 |
 |:---:|:---|:---|
-| `GET` | `/api/audit` | 获取安全审计日志 |
+| `GET` | `/api/audit/logs` | 获取安全审计日志（需要管理员 Bearer Token） |
 
 ### 系统接口
 
 | 方法 | 路径 | 说明 |
 |:---:|:---|:---|
 | `GET` | `/api/system/llm-config` | 查询 LLM 配置信息（API 密钥脱敏） |
+| `GET` | `/api/system/health` | 返回服务、知识库和流式资源健康状态 |
 
 **响应示例**：
 
@@ -559,7 +625,7 @@ OpenAI 兼容 API 客户端：
 {
   "baseUrl": "https://api.openai.com/v1",
   "model": "gpt-4o-mini",
-  "apiKey": "sk-xxxx...abcd",
+  "apiKey": "***",
   "temperature": 0.2,
   "maxTokens": 800,
   "llmAvailable": true
@@ -601,7 +667,7 @@ OpenAI 兼容 API 客户端：
 **🧠 AI 能力**
 - LLM 对话生成（OpenAI 兼容）
 - RAG 检索增强生成
-- Agent Tool Calling
+- Agent 服务编排与分析
 - 哈希嵌入（128 维）
 - 混合检索排序
 
@@ -620,9 +686,9 @@ OpenAI 兼容 API 客户端：
 
 ---
 
-## 🌐 在线体验
+## 🌐 在线体验（部署环境信息）
 
-项目已部署上线，可直接访问体验：
+如果部署环境仍保持在线，可直接访问；该地址和 Nginx/systemd 配置不包含在本地代码仓库中：
 
 🔗 **[https://mentalczh66.xyz](https://mentalczh66.xyz)**
 
@@ -654,15 +720,17 @@ cd ResumeAgent
 
 ### 2️⃣ 配置 LLM（可选）
 
-编辑 `backend/src/main/resources/application.yml`：
+通过环境变量配置 LLM（不将密钥写入仓库）：
 
 ```yaml
 resumeagent:
   openai:
-    base-url: "https://your-api-endpoint/v1"   # API 地址
-    api-key: "sk-xxxx"                          # API 密钥
-    chat-model: gpt-4o-mini                     # 模型名称
+    base-url: "${ZHIPU_BASE_URL:}"
+    api-key: "${ZHIPU_API_KEY:}"
+    chat-model: "${ZHIPU_CHAT_MODEL:gpt-4o-mini}"
 ```
+
+也可以在启动前设置 `ZHIPU_BASE_URL`、`ZHIPU_API_KEY`、`ZHIPU_CHAT_MODEL`、`ZHIPU_TEMPERATURE` 和 `ZHIPU_MAX_TOKENS`。
 
 <details>
 <summary>📋 支持的 LLM 提供商（点击展开）</summary>
@@ -699,9 +767,10 @@ npm run dev
 
 前端将在 http://localhost:5173 启动，自动代理 `/api` 请求到后端。
 
-### 5️⃣ 上传个人资料
+### 5️⃣ 建立你的档案
 
-访问前端页面，在"知识库"标签页上传你的个人资料。上传后系统自动完成：
+1. 在 **"我的档案"** 标签页上传简历（PDF/TXT/MD 自动解析）并填写网申式信息表单，支持多模板管理、一键切换、版本历史/回滚。
+2. 在 **"知识库"** 标签页补充项目文档、技术博客等资料。上传后系统自动完成：
 
 ```
 文件上传 → 文本解析 → 语义切片 → 向量化 → 入库
@@ -717,9 +786,11 @@ npm run dev
 - 📊 **技能分析** — 自动梳理技术栈与能力图谱
 - 📁 **项目查询 / 项目详情** — 深度检索项目经历
 - 🧭 **技术引航图** — 交互式技术学习引导，点击知识点标签即刻开始，AI 自动生成推荐追问带你层层深入
+- 📋 **我的档案** — 网申式信息表单 + 简历上传解析，多模板切换、版本历史/回滚
+- 📝 **面试复盘** — 模拟面试后生成维度评分与逐题点评，多场成绩对比，可导出 PDF/Markdown
 - 🟢 **LLM 状态** — 侧边栏绿点悬停查看当前 LLM 配置
 
-> ⚠️ **注意**：当前使用内存存储，重启后端需重新上传资料。
+> 💾 **数据持久化**：档案、上传文档、面试复盘均落盘到 `backend/data/`（`profiles/`、`knowledge/`、`reviews/`），重启自动加载，无需重复上传。
 
 ---
 
@@ -729,17 +800,33 @@ npm run dev
 
 ```yaml
 resumeagent:
+  admin-token: "${RESUME_AGENT_ADMIN_TOKEN:}" # 审计接口管理员 Token，未配置时拒绝访问
+  allowed-origins: "${RESUME_AGENT_ALLOWED_ORIGINS:http://localhost:5173}"
   openai:
-    base-url: ""              # OpenAI 兼容 API 端点
-    api-key: ""               # API 密钥
-    chat-model: gpt-4o-mini   # 模型名称
-    temperature: 0.3          # 生成温度（0-1），越低越确定
-    max-tokens: 1024          # 单次最大生成 token 数
+    base-url: "${ZHIPU_BASE_URL:}"       # OpenAI 兼容 API 端点
+    api-key: "${ZHIPU_API_KEY:}"         # API 密钥，不写入仓库
+    chat-model: "${ZHIPU_CHAT_MODEL:gpt-4o-mini}"
+    temperature: "${ZHIPU_TEMPERATURE:0.2}"
+    max-tokens: "${ZHIPU_MAX_TOKENS:2048}"
   security:
     block-on-injection: true  # 检测到注入时直接拒绝
     redact-sensitive: true    # 输入中的 PII 自动脱敏
   audit:
     enabled: true             # 记录所有交互日志
+    max-entries: 2000
+  stream:
+    timeout-ms: 300000
+    max-concurrent: 16
+  session:
+    max-conversations: 1000
+    idle-timeout-minutes: 30
+    max-history-messages: 20
+  rate-limit:
+    enabled: true
+    requests-per-minute: 30
+  index:
+    batch-load: true
+    warn-chunk-count: 10000
 ```
 
 | 配置项 | 默认值 | 说明 |
@@ -747,11 +834,33 @@ resumeagent:
 | `openai.base-url` | `""` | API 端点地址，留空则使用模板回答 |
 | `openai.api-key` | `""` | API 密钥 |
 | `openai.chat-model` | `gpt-4o-mini` | 模型名称 |
-| `openai.temperature` | `0.3` | 生成随机性，0 最确定，1 最随机（推荐 0.2-0.4） |
-| `openai.max-tokens` | `1024` | 单次最大生成长度 |
+| `openai.temperature` | `0.2` | 生成随机性，0 最确定，1 最随机（推荐 0.2-0.4） |
+| `openai.max-tokens` | `2048` | 单次最大生成长度 |
 | `security.block-on-injection` | `true` | 是否阻止注入攻击 |
 | `security.redact-sensitive` | `true` | 是否脱敏 PII 信息 |
 | `audit.enabled` | `true` | 是否启用审计日志 |
+| `audit.max-entries` | `2000` | 内存中保留的最大审计记录数 |
+| `stream.timeout-ms` | `300000` | 单次 SSE 流最大时长 |
+| `stream.max-concurrent` | `16` | 最大并发流式请求数 |
+| `session.max-conversations` | `1000` | 最大会话数 |
+| `session.idle-timeout-minutes` | `30` | 会话空闲过期时间 |
+| `session.max-history-messages` | `20` | 单会话历史消息窗口 |
+| `rate-limit.requests-per-minute` | `30` | 单客户端每分钟 LLM 请求数 |
+
+推荐通过环境变量配置敏感信息：
+
+```bash
+set ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+set ZHIPU_API_KEY=your-api-key
+set RESUME_AGENT_ADMIN_TOKEN=your-admin-token
+set RESUME_AGENT_ALLOWED_ORIGINS=https://your-domain.example
+```
+
+审计接口需要管理员请求头：
+
+```http
+Authorization: Bearer your-admin-token
+```
 
 ---
 
@@ -763,45 +872,63 @@ ResumeAgent/
 │   ├── src/main/java/com/resumeagent/
 │   │   ├── controller/                         # REST 控制器
 │   │   │   ├── ChatController.java             #   聊天问答接口
-│   │   │   ├── AgentController.java            #   Agent 分析接口
-│   │   │   ├── RagController.java              #   知识库接口
+│   │   │   ├── AgentController.java            #   Agent 分析接口（匹配报告/面试复盘）
+│   │   │   ├── ProfileController.java          #   用户档案模板接口（多模板/版本回滚/简历上传）
+│   │   │   ├── RagController.java              #   知识库接口（文档管理/文件上传）
+│   │   │   ├── ExportController.java           #   导出接口（PDF/Markdown）
 │   │   │   ├── AuditController.java            #   审计日志接口
 │   │   │   ├── SystemController.java           #   系统配置接口（LLM 信息）
 │   │   │   └── TechGuideController.java        #   技术引航图教学接口
 │   │   ├── service/                            # 业务逻辑
 │   │   │   ├── ChatService.java                #   问答编排（RAG 流水线）
-│   │   │   ├── KnowledgeBaseService.java       #   知识库（向量存储 + 检索）
+│   │   │   ├── KnowledgeBaseService.java       #   知识库（两阶段检索）
 │   │   │   ├── EmbeddingService.java           #   向量化（哈希嵌入）
-│   │   │   ├── LlmService.java                 #   LLM 调用客户端
+│   │   │   ├── LlmService.java                 #   LLM 调用客户端（真流式）
 │   │   │   ├── AgentService.java               #   Agent 分析引擎
+│   │   │   ├── ProfileService.java             #   用户档案模板（JSON 持久化 + 版本）
+│   │   │   ├── MatchReportService.java         #   简历/JD 深度匹配报告
+│   │   │   ├── InterviewReviewService.java     #   模拟面试复盘（存档对比）
+│   │   │   ├── ExportService.java              #   PDF/Markdown 导出（CJK 字体探测）
+│   │   │   ├── KnowledgeDocumentService.java   #   上传文档落盘持久化
+│   │   │   ├── PdfTextExtractor.java           #   PDF 简历文本抽取
+│   │   │   ├── KnowledgeAutoLoader.java        #   内置知识自动入库
 │   │   │   ├── SafetyService.java              #   安全防护（注入检测 + PII）
 │   │   │   ├── PromptBuilder.java              #   提示词工程
+│   │   │   ├── FollowupFilter.java             #   流式追问块过滤器
+│   │   │   ├── DataDirs.java                   #   数据目录统一解析/迁移
 │   │   │   ├── AuditService.java               #   审计日志
 │   │   │   └── TechGuideService.java           #   技术引航图教学服务（追问提取+RAG检索）
 │   │   ├── dto/                                # 数据传输对象
 │   │   ├── model/                              # 数据模型
 │   │   └── config/                             # 配置类
 │   └── src/main/resources/
-│       └── application.yml                     # ⚙️ 应用配置
+│       ├── application.yml                     # ⚙️ 应用配置
+│       └── knowledge/                          # 内置知识库（resume/projects/blog）
 ├── frontend/                                   # Vue3 前端
 │   ├── src/
 │   │   ├── components/                         # 页面组件
 │   │   │   ├── WelcomePanel.vue                #   欢迎首页（技术栈/能力概览）
+│   │   │   ├── ProfilePanel.vue                #   我的档案（网申表单+简历上传+多模板）
+│   │   │   ├── KnowledgePanel.vue              #   知识库管理（上传/粘贴/删除）
 │   │   │   ├── ChatPanel.vue                   #   模拟面试（面试/通用双模式）
-│   │   │   ├── JobMatchPanel.vue               #   岗位匹配
+│   │   │   ├── JobMatchPanel.vue               #   岗位匹配（快速/深度报告双模式）
+│   │   │   ├── ReviewPanel.vue                 #   面试复盘（多场对比+导出）
 │   │   │   ├── InterviewPanel.vue              #   面试助手
 │   │   │   ├── SkillAnalysisPanel.vue          #   技能分析
 │   │   │   ├── ProjectQueryPanel.vue           #   项目查询
 │   │   │   ├── ProjectDetailPanel.vue          #   项目详情
 │   │   │   ├── TechGuidePanel.vue              #   技术引航图（引导追问+智能滚动）
 │   │   │   ├── GuideModal.vue                  #   使用指南弹窗
+│   │   │   ├── ThinkingIndicator.vue           #   思考中指示器
 │   │   │   └── AuditPanel.vue                  #   审计日志（管理员）
 │   │   ├── api/                                # API 客户端
 │   │   │   ├── http.ts                         #   Axios 实例
-│   │   │   ├── chat.ts                         #   聊天 API
 │   │   │   ├── agent.ts                        #   Agent API
+│   │   │   ├── profile.ts                      #   档案模板 API
 │   │   │   ├── rag.ts                          #   知识库 API
+│   │   │   ├── export.ts                       #   导出 API
 │   │   │   └── audit.ts                        #   审计 API
+│   │   ├── composables/                        # 组合式函数（会话/存储/Markdown）
 │   │   ├── App.vue                             # 主应用（标签页路由）
 │   │   └── main.ts                             # 入口文件
 │   └── package.json
@@ -817,10 +944,10 @@ ResumeAgent/
   - Vue 聊天页面、Spring Boot 接口、LLM 调用、SSE 流式输出
 - [x] **Phase 2** — RAG 知识库
   - 文档解析、文本切片、Embedding 向量化、向量检索、检索增强问答
-- [x] **Phase 3** — Agent 能力
-  - 工具调用、岗位匹配、技能分析、安全防护、对话审计
+- [x] **Phase 3** — 服务编排与分析能力
+  - 岗位匹配、技能分析、安全防护、对话审计
 - [x] **Phase 3.5** — RAG 全面化重构
-  - 移除所有硬编码个人数据，系统提示词和 Agent 分析完全基于知识库动态构建
+  - 个人资料不硬编码，系统提示词和分析能力基于知识库动态构建
   - PromptBuilder 动态系统提示词，RAG 检索结果作为 LLM 背景知识
   - AgentService 所有 fallback 方法改为基于知识库检索生成
 - [x] **Phase 3.6** — 前端 UI 重构
@@ -865,6 +992,14 @@ ResumeAgent/
   - 强制 400 字以上回答要求，系统提示词明确字数下限
   - 后处理重试机制：回答长度不足时自动重新请求并附加字数提示
   - 双重约束确保 LLM 不会偷懒，提升面试模拟质量
+- [x] **Phase 5.8** — 个人资产与真流式升级
+  - 我的档案：网申式信息表单 + 简历上传解析（PDF/TXT/MD），多模板管理、一键切换、版本历史/回滚
+  - 档案以「我的档案」为第一事实来源最优先注入检索；档案切换自动清空旧身份对话历史（防幻觉）
+  - 深度匹配报告（逐条 JD 要求 + 维度分 + 简历修改建议）与模拟面试复盘（维度评分 + 逐题点评，多场对比）
+  - PDF/Markdown 导出（PDFBox 3.x + CJK 字体自动探测，无中文字体降级 Markdown）
+  - 检索层重构：倒排索引粗排（中文 2-gram）+ 向量/词汇精排两阶段检索
+  - SSE 真流式：直接转发 LLM `stream: true` 增量 delta；知识库/档案/复盘 JSON 落盘持久化（`backend/data/`）
+  - 个人资料不硬编码：检索路由与关键词基于知识库元数据/IDF 动态生成
 - [ ] **Phase 6** — 优化与扩展
   - 替换 Milvus 向量数据库
   - 优化检索算法（重排序、多路召回）
@@ -878,7 +1013,7 @@ ResumeAgent/
 | 亮点 | 说明 |
 |:---|:---|
 | 🧠 **RAG 驱动** | 基于个人知识库动态生成回答，引用可溯源，大幅降低幻觉 |
-| 🚫 **零硬编码** | 所有个人数据从知识库检索，系统提示词和 Agent 分析均动态构建 |
+| 🚫 **个人资料不硬编码** | 个人经历从知识库检索，系统提示词和分析结果基于当前资料动态构建 |
 | 🤖 **Agent 能力** | 岗位匹配、技能分析、面试辅助，不只是简单问答 |
 | 🛡️ **安全优先** | Prompt Injection 检测 + PII 脱敏，Agent 安全设计 |
 | 📡 **流式体验** | SSE 逐字输出，打字机效果，实时感知生成过程 |
@@ -900,7 +1035,7 @@ ResumeAgent/
 
 > **ResumeAgent** — 基于 RAG 的模拟面试 AI 系统
 >
-> 基于 Spring Boot + Vue3 开发模拟面试 AI 系统，通过 RAG 技术构建个人知识库，AI 以候选人身份回答面试官问题。系统所有个人数据均从知识库动态检索（零硬编码），全程第一人称回答，支持向量检索、流式对话、岗位匹配分析、技能分析和面试回答生成，并针对 Agent 场景设计 Prompt Injection 防护机制。已部署上线（Nginx + HTTPS），可在线体验。
+> 基于 Spring Boot + Vue3 开发模拟面试 AI 系统，通过 RAG 技术构建个人知识库，AI 以候选人身份回答面试官问题。个人资料均从知识库动态检索，全程第一人称回答，支持向量检索、流式对话、岗位匹配分析、技能分析和面试回答生成，并针对 Agent 场景设计 Prompt Injection 防护机制。生产环境采用 Nginx + HTTPS 部署，可在线体验。
 
 ---
 

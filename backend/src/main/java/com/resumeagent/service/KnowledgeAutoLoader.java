@@ -1,6 +1,7 @@
 package com.resumeagent.service;
 
 import com.resumeagent.dto.IngestRequest;
+import com.resumeagent.config.ResumeAgentProperties;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -28,9 +29,14 @@ public class KnowledgeAutoLoader implements CommandLineRunner {
     );
 
     private final KnowledgeBaseService knowledgeBaseService;
+    private final KnowledgeDocumentService documentService;
+    private final ResumeAgentProperties properties;
 
-    public KnowledgeAutoLoader(KnowledgeBaseService knowledgeBaseService) {
+    public KnowledgeAutoLoader(KnowledgeBaseService knowledgeBaseService, KnowledgeDocumentService documentService,
+                               ResumeAgentProperties properties) {
         this.knowledgeBaseService = knowledgeBaseService;
+        this.documentService = documentService;
+        this.properties = properties;
     }
 
     @Override
@@ -63,6 +69,8 @@ public class KnowledgeAutoLoader implements CommandLineRunner {
             return;
         }
 
+        java.util.List<IngestRequest> batch = new java.util.ArrayList<>();
+        java.util.List<String> sourceNames = new java.util.ArrayList<>();
         for (Resource resource : resources) {
             if (!resource.isReadable()) continue;
             try {
@@ -86,12 +94,29 @@ public class KnowledgeAutoLoader implements CommandLineRunner {
                 }
 
                 IngestRequest request = new IngestRequest(sourceType, sourceName, content);
-                var response = knowledgeBaseService.ingest(request);
-                log.info("自动加载知识文件: {} (type={}, chunks={})", filename, sourceType, response.chunks());
+                // 用户上传的同名文档优先（已从 data/knowledge/ 自动加载），内置文件跳过避免重复
+                if (documentService.isManual(sourceName)) {
+                    log.info("跳过内置知识文件（存在同名上传文档）: {}", filename);
+                    continue;
+                }
+
+                if (properties.getIndex().isBatchLoad()) {
+                    batch.add(request);
+                    sourceNames.add(sourceName);
+                } else {
+                    var response = knowledgeBaseService.ingest(request);
+                    documentService.markBuiltin(sourceName);
+                    log.info("自动加载知识文件: {} (type={}, chunks={})", filename, sourceType, response.chunks());
+                }
 
             } catch (Exception e) {
                 log.warn("加载知识文件失败: {} - {}", resource.getFilename(), e.getMessage());
             }
+        }
+        if (!batch.isEmpty()) {
+            var response = knowledgeBaseService.ingestAll(batch);
+            sourceNames.forEach(documentService::markBuiltin);
+            log.info("批量加载内置知识文件: files={}, chunks={}", batch.size(), response.chunks());
         }
     }
 

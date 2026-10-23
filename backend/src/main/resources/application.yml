@@ -1,20 +1,41 @@
 spring:
   application:
     name: resume-agent
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
 
 resumeagent:
+  admin-token: "${RESUME_AGENT_ADMIN_TOKEN:}"
+  allowed-origins: "${RESUME_AGENT_ALLOWED_ORIGINS:http://localhost:5173}"
   openai:
-    base-url: "https://open.bigmodel.cn/api/paas/v4"
-    api-key: "ba564ee7b11248269d2dbb5e9d73bc21.ZEkAqTAqeZSGPkeC"
-    chat-model: "GLM-4-Flash-250414"
-    temperature: 0.5
-    max-tokens: 4096
-    top-p: 0.9
+    base-url: "${ZHIPU_BASE_URL:}"
+    api-key: "${ZHIPU_API_KEY:}"
+    chat-model: "${ZHIPU_CHAT_MODEL:gpt-4o-mini}"
+    embedding-model: "${ZHIPU_EMBEDDING_MODEL:}"
+    temperature: "${ZHIPU_TEMPERATURE:0.2}"
+    max-tokens: "${ZHIPU_MAX_TOKENS:2048}"
+    top-p: "${ZHIPU_TOP_P:0.9}"
   security:
     block-on-injection: true
     redact-sensitive: true
   audit:
     enabled: true
+    max-entries: "${RESUME_AGENT_AUDIT_MAX_ENTRIES:2000}"
+  stream:
+    timeout-ms: "${RESUME_AGENT_STREAM_TIMEOUT_MS:300000}"
+    max-concurrent: "${RESUME_AGENT_STREAM_MAX_CONCURRENT:16}"
+  session:
+    max-conversations: "${RESUME_AGENT_SESSION_MAX_CONVERSATIONS:1000}"
+    idle-timeout-minutes: "${RESUME_AGENT_SESSION_IDLE_TIMEOUT_MINUTES:30}"
+    max-history-messages: "${RESUME_AGENT_SESSION_MAX_HISTORY_MESSAGES:20}"
+  rate-limit:
+    enabled: "${RESUME_AGENT_RATE_LIMIT_ENABLED:true}"
+    requests-per-minute: "${RESUME_AGENT_RATE_LIMIT_REQUESTS_PER_MINUTE:30}"
+  index:
+    batch-load: "${RESUME_AGENT_INDEX_BATCH_LOAD:true}"
+    warn-chunk-count: "${RESUME_AGENT_INDEX_WARN_CHUNK_COUNT:10000}"
 
 server:
   port: 8080

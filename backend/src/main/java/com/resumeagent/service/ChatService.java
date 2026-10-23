@@ -1,5 +1,6 @@
 package com.resumeagent.service;
 
+import com.resumeagent.config.ResumeAgentProperties;
 import com.resumeagent.dto.ChatRequest;
 import com.resumeagent.dto.ChatResponse;
 import com.resumeagent.dto.ConversationMessageResponse;
@@ -14,8 +15,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Future;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -27,7 +34,12 @@ public class ChatService {
     private final PromptBuilder promptBuilder;
     private final LlmService llmService;
     private final AuditService auditService;
-    private final Map<String, List<ConversationMessage>> conversationStore = new ConcurrentHashMap<>();
+    private final ProfileService profileService;
+    private final ConversationStore conversationStore;
+    /** conversationId → 对话启用时的档案代数（档案切换后旧历史作废，避免旧身份污染回答） */
+    private final Map<String, Long> conversationProfileGeneration = new ConcurrentHashMap<>();
+    private final ResumeAgentProperties properties;
+    private final Executor streamExecutor;
 
     /** 对话历史上限：超过此数量时只保留最近 N 条，避免 LLM 上下文溢出 */
     private static final int MAX_HISTORY_MESSAGES = 20;
@@ -49,21 +61,159 @@ public class ChatService {
                        SafetyService safetyService,
                        PromptBuilder promptBuilder,
                        LlmService llmService,
-                       AuditService auditService) {
+                       AuditService auditService,
+                       ProfileService profileService) {
+        this(knowledgeBaseService, safetyService, promptBuilder, llmService, auditService,
+                profileService, new ResumeAgentProperties(), new ConversationStore(new ResumeAgentProperties()), Runnable::run);
+    }
+
+    @Autowired
+    public ChatService(KnowledgeBaseService knowledgeBaseService,
+                       SafetyService safetyService,
+                       PromptBuilder promptBuilder,
+                       LlmService llmService,
+                       AuditService auditService,
+                       ProfileService profileService,
+                       ResumeAgentProperties properties,
+                       ConversationStore conversationStore,
+                       @Qualifier("streamTaskExecutor") Executor streamExecutor) {
         this.knowledgeBaseService = knowledgeBaseService;
         this.safetyService = safetyService;
         this.promptBuilder = promptBuilder;
         this.llmService = llmService;
         this.auditService = auditService;
+        this.profileService = profileService;
+        this.properties = properties;
+        this.conversationStore = conversationStore;
+        this.streamExecutor = streamExecutor;
     }
 
     public ChatResponse chat(ChatRequest request) {
+        Prepared prepared = prepare(request);
+        if (!prepared.verdict().allowed()) {
+            handleBlocked(request, prepared.verdict());
+            return new ChatResponse(request.conversationId(), prepared.verdict().reason(), List.of());
+        }
+
+        String reply;
+        if (prepared.ragMode() && (prepared.contexts().isEmpty() || isGreetingWithoutProfile(prepared))) {
+            // 无知识命中 / 无档案的问候：不调用 LLM，直接确定性回复（避免幻觉）
+            reply = safeReply(request, prepared);
+        } else {
+            reply = llmService.generate(prepared.systemPrompt(), prepared.userPrompt(), prepared.historyMessages())
+                    .orElseGet(() -> prepared.ragMode()
+                            ? promptBuilder.buildFallbackChatAnswer(request.message(), prepared.contexts())
+                            : "抱歉，LLM 服务未配置。请在 application.yml 中配置 resumeagent.openai 相关参数。");
+
+            // 模拟面试模式下，检查回答长度，如果太短则重新请求
+            // （仅非流式路径：流式输出后内容已发给用户，无法重试）
+            if (prepared.ragMode() && reply.length() < MIN_ANSWER_LENGTH) {
+                String retryPrompt = prepared.userPrompt() + "\n\n[系统提示：你的回答太短了，必须达到400字以上。请重新回答，展开更多细节。]";
+                Optional<String> retryReply = llmService.generate(prepared.systemPrompt(), retryPrompt, prepared.historyMessages());
+                if (retryReply.isPresent() && retryReply.get().length() >= reply.length()) {
+                    reply = retryReply.get();
+                }
+            }
+        }
+
+        finish(request, prepared, reply);
+        return new ChatResponse(request.conversationId(), reply, prepared.ragMode() ? buildCitations(prepared.contexts()) : List.of());
+    }
+
+    public SseEmitter stream(ChatRequest request) {
+        SseEmitter emitter = new SseEmitter(properties.getStream().getTimeoutMs());
+        AtomicReference<Future<?>> taskRef = new AtomicReference<>();
+        Runnable cancelTask = () -> {
+            Future<?> task = taskRef.get();
+            if (task != null) {
+                task.cancel(true);
+            }
+        };
+        emitter.onCompletion(cancelTask);
+        emitter.onTimeout(() -> {
+            cancelTask.run();
+            emitter.complete();
+        });
+        emitter.onError(error -> cancelTask.run());
+        Future<?> task = CompletableFuture.runAsync(() -> {
+            try {
+                streamChat(request,
+                        chunk -> {
+                            try {
+                                emitter.send(chunk);
+                            } catch (Exception exception) {
+                                throw new CompletionException(exception);
+                            }
+                        },
+                        () -> {
+                            try {
+                                emitter.send(SseEmitter.event().name("done").data("[DONE]"));
+                                emitter.complete();
+                            } catch (Exception exception) {
+                                throw new CompletionException(exception);
+                            }
+                        });
+            } catch (Exception exception) {
+                emitter.completeWithError(exception);
+            }
+        }, streamExecutor);
+        taskRef.set(task);
+        return emitter;
+    }
+
+    /**
+     * 真流式问答：LLM 增量 delta 实时转发（不再是"整段生成完再假流式"）。
+     * 输出与完成信号以回调注入，便于单元测试。
+     */
+    public void streamChat(ChatRequest request, Consumer<String> send, Runnable onDone) {
+        Prepared prepared = prepare(request);
+        if (!prepared.verdict().allowed()) {
+            handleBlocked(request, prepared.verdict());
+            send.accept(prepared.verdict().reason());
+            onDone.run();
+            return;
+        }
+
+        if (prepared.ragMode() && (prepared.contexts().isEmpty() || isGreetingWithoutProfile(prepared))) {
+            // 无知识命中 / 无档案的问候：不调用 LLM，直接推确定性回复（防幻觉）
+            String safe = safeReply(request, prepared);
+            send.accept(safe);
+            finish(request, prepared, safe);
+            onDone.run();
+            return;
+        }
+
+        StringBuilder streamedReply = new StringBuilder();
+        Optional<String> generated = llmService.generateStream(
+                prepared.systemPrompt(), prepared.userPrompt(), prepared.historyMessages(),
+                delta -> {
+                    streamedReply.append(delta);
+                    send.accept(delta);
+                });
+
+        String reply;
+        if (generated.isPresent()) {
+            reply = generated.get();
+        } else {
+            // LLM 不可用：补发降级回答
+            reply = prepared.ragMode()
+                    ? promptBuilder.buildFallbackChatAnswer(request.message(), prepared.contexts())
+                    : "抱歉，LLM 服务未配置。请在 application.yml 中配置 resumeagent.openai 相关参数。";
+            send.accept(reply);
+        }
+
+        finish(request, prepared, reply);
+        onDone.run();
+    }
+
+    /**
+     * 安全检查 + 问题分类 + 多路检索 + 提示词构建。
+     * 流式与非流式路径共用，保证两条路径行为一致。
+     */
+    private Prepared prepare(ChatRequest request) {
         SafetyVerdict verdict = safetyService.inspect(request.message());
         if (!verdict.allowed()) {
-            auditService.record("chat-blocked", request.conversationId(), verdict.sanitizedText(), verdict.reason(), "injection");
-            appendMessage(request.conversationId(), "user", verdict.sanitizedText());
-            appendMessage(request.conversationId(), "assistant", verdict.reason());
-            return new ChatResponse(request.conversationId(), verdict.reason(), List.of());
+            return new Prepared(verdict, false, false, List.of(), "", "", List.of());
         }
 
         List<ConversationMessage> history = historyMessages(request.conversationId());
@@ -72,10 +222,12 @@ public class ChatService {
         final List<KnowledgeSearchItem> contexts;
         String systemPrompt;
         String userPrompt;
+        boolean greeting = false;
 
         if (isRagMode) {
             // RAG 模式：根据问题类型进行多轮检索，构建上下文
             QuestionType type = classifyQuestion(request.message(), history);
+            greeting = type == QuestionType.GREETING;
             contexts = retrieveContext(request.message(), history, type);
             systemPrompt = promptBuilder.buildDynamicSystemPrompt(contexts, history.size());
             userPrompt = promptBuilder.buildChatUserPrompt(request.message(), history, contexts);
@@ -86,58 +238,54 @@ public class ChatService {
             userPrompt = request.message();
         }
 
-        String reply;
-        if (isRagMode && contexts.isEmpty()) {
-            // 知识库无相关内容时，直接返回 fallback，不调用 LLM（避免幻觉）
-            reply = promptBuilder.buildFallbackChatAnswer(request.message(), contexts);
-        } else {
-            // 将对话历史转为 messages 格式传给 LLM
-            List<Map<String, String>> historyMessages = history.stream()
-                    .map(m -> Map.of("role", m.role(), "content", m.content()))
-                    .toList();
-
-            reply = llmService.generate(systemPrompt, userPrompt, historyMessages)
-                    .orElseGet(() -> isRagMode
-                            ? promptBuilder.buildFallbackChatAnswer(request.message(), contexts)
-                            : "抱歉，LLM 服务未配置。请在 application.yml 中配置 resumeagent.openai 相关参数。");
-
-            // 模拟面试模式下，检查回答长度，如果太短则重新请求
-            if (isRagMode && reply.length() < MIN_ANSWER_LENGTH) {
-                String retryPrompt = userPrompt + "\n\n[系统提示：你的回答太短了，必须达到400字以上。请重新回答，展开更多细节。]";
-                Optional<String> retryReply = llmService.generate(systemPrompt, retryPrompt, historyMessages);
-                if (retryReply.isPresent() && retryReply.get().length() >= reply.length()) {
-                    reply = retryReply.get();
-                }
-            }
+        if (request.jobTitle() != null && !request.jobTitle().isBlank()) {
+            userPrompt = "目标岗位：" + request.jobTitle().trim() + "\n\n" + userPrompt;
         }
 
-        appendMessage(request.conversationId(), "user", verdict.sanitizedText());
-        appendMessage(request.conversationId(), "assistant", reply);
-        auditService.record(isRagMode ? "chat" : "chat-llm", request.conversationId(), verdict.sanitizedText(), reply, verdict.reason());
-        return new ChatResponse(request.conversationId(), reply, isRagMode ? buildCitations(contexts) : List.of());
+        List<Map<String, String>> historyMessages = history.stream()
+                .map(m -> Map.of("role", m.role(), "content", m.content()))
+                .toList();
+        return new Prepared(verdict, isRagMode, greeting, contexts, systemPrompt, userPrompt, historyMessages);
     }
 
-    public SseEmitter stream(ChatRequest request) {
-        SseEmitter emitter = new SseEmitter(0L);
-        CompletableFuture.runAsync(() -> {
-            try {
-                ChatResponse response = chat(request);
-                for (String chunk : splitIntoChunks(response.reply())) {
-                    emitter.send(chunk);
-                    Thread.sleep(80L);
-                }
-                emitter.send(SseEmitter.event().name("done").data("[DONE]"));
-                emitter.complete();
-            } catch (Exception exception) {
-                emitter.completeWithError(exception);
-            }
-        });
-        return emitter;
+    /** 问候类问题且没有用户档案：走确定性简短问候，不给 LLM 编造自我介绍的机会 */
+    private boolean isGreetingWithoutProfile(Prepared prepared) {
+        return prepared.ragMode() && prepared.greeting() && prepared.contexts().stream()
+                .noneMatch(item -> KnowledgeBaseService.PROFILE_SOURCE_NAME.equals(item.sourceName()));
+    }
+
+    /** 无需调用 LLM 的安全回复（无知识/无档案的问候场景） */
+    private String safeReply(ChatRequest request, Prepared prepared) {
+        return isGreetingWithoutProfile(prepared)
+                ? promptBuilder.buildGreetingAnswer()
+                : promptBuilder.buildFallbackChatAnswer(request.message(), prepared.contexts());
+    }
+
+    private void handleBlocked(ChatRequest request, SafetyVerdict verdict) {
+        auditService.record("chat-blocked", request.conversationId(), verdict.sanitizedText(), verdict.reason(), "injection");
+        appendMessage(request.conversationId(), "user", verdict.sanitizedText());
+        appendMessage(request.conversationId(), "assistant", verdict.reason());
+    }
+
+    private void finish(ChatRequest request, Prepared prepared, String reply) {
+        appendMessage(request.conversationId(), "user", prepared.verdict().sanitizedText());
+        appendMessage(request.conversationId(), "assistant", reply);
+        auditService.record(prepared.ragMode() ? "chat" : "chat-llm",
+                request.conversationId(), prepared.verdict().sanitizedText(), reply, prepared.verdict().reason());
+    }
+
+    /** 一次问答的全部预处理结果 */
+    private record Prepared(SafetyVerdict verdict,
+                            boolean ragMode,
+                            boolean greeting,
+                            List<KnowledgeSearchItem> contexts,
+                            String systemPrompt,
+                            String userPrompt,
+                            List<Map<String, String>> historyMessages) {
     }
 
     public List<ConversationMessageResponse> history(String conversationId) {
-        List<ConversationMessage> messages = conversationStore.getOrDefault(conversationId, Collections.emptyList());
-        return messages.stream()
+        return conversationStore.history("chat", conversationId).stream()
                 .map(message -> new ConversationMessageResponse(message.role(), message.content()))
                 .toList();
     }
@@ -150,17 +298,25 @@ public class ChatService {
     }
 
     private List<ConversationMessage> historyMessages(String conversationId) {
-        List<ConversationMessage> all = conversationStore.getOrDefault(conversationId, Collections.emptyList());
-        if (all.size() <= MAX_HISTORY_MESSAGES) {
-            return all;
+        // 档案切换检测：旧历史携带旧身份会污染新档案的回答，代数变化时清空该对话的历史
+        long currentGeneration = profileService.generation();
+        Long recorded = conversationProfileGeneration.putIfAbsent(conversationId, currentGeneration);
+        if (recorded != null && recorded.longValue() != currentGeneration) {
+            conversationStore.clear("chat", conversationId);
+            conversationProfileGeneration.remove(conversationId);
+            conversationProfileGeneration.put(conversationId, currentGeneration);
+            return List.of();
         }
-        // 滑动窗口：丢弃最早的消息，保留最近的 MAX_HISTORY_MESSAGES 条
-        return all.subList(all.size() - MAX_HISTORY_MESSAGES, all.size());
+
+        return conversationStore.history("chat", conversationId);
     }
 
     private void appendMessage(String conversationId, String role, String content) {
-        conversationStore.computeIfAbsent(conversationId, key -> new CopyOnWriteArrayList<>())
-                .add(new ConversationMessage(role, content));
+        conversationStore.append("chat", conversationId, role, content);
+    }
+
+    public int activeConversationCount() {
+        return conversationStore.activeCount();
     }
 
     /**
@@ -171,21 +327,21 @@ public class ChatService {
         List<KnowledgeSearchItem> allItems = new ArrayList<>();
         String contextualQuery = buildContextualQuery(message, history);
 
+        // 用户档案（激活的模板）永远最优先注入：所有回答以用户亲手填写/上传的信息为事实来源
+        allItems.addAll(knowledgeBaseService.searchBySourceName(KnowledgeBaseService.PROFILE_SOURCE_NAME));
+
         switch (type) {
             case SELF_INTRODUCTION -> {
-                // 自我介绍：先精确查找个人信息，再广泛搜索简历相关内容
-                allItems.addAll(knowledgeBaseService.searchBySourceName("个人信息"));
+                // 自我介绍：先精确查找简历类资料，再广泛搜索简历相关内容
+                allItems.addAll(knowledgeBaseService.searchBySourceType("resume", 8));
                 allItems.addAll(knowledgeBaseService.search(contextualQuery + " 简历 教育背景 技能 实习经历").items());
                 allItems.addAll(knowledgeBaseService.search("项目 技术栈 亮点 成果").items());
             }
             case PROJECT -> {
-                // 项目类：优先检索重点项目，再补充其他项目
-                // 1. 优先检索简历中的项目概览（含所有项目的结构化摘要）
-                allItems.addAll(knowledgeBaseService.searchBySourceName("个人信息"));
-                // 2. 补充检索 projects 目录下的详细项目文档
-                allItems.addAll(knowledgeBaseService.searchBySourceName("FundPilot-AI"));
-                allItems.addAll(knowledgeBaseService.searchBySourceName("ResumeAgent"));
-                // 3. 补充检索其他项目（技术栈、实现难点）
+                // 项目类：简历概览 + 查询中被提及的项目文档 + 相关性检索
+                // 项目名来自知识库元数据动态匹配，新增/删除项目文档无需修改代码
+                allItems.addAll(knowledgeBaseService.searchBySourceType("resume", 6));
+                allItems.addAll(searchMentionedSources(contextualQuery));
                 allItems.addAll(knowledgeBaseService.search(contextualQuery + " 项目 技术栈 实现").items());
                 allItems.addAll(knowledgeBaseService.search(contextualQuery + " 难点 解决方案 优化").items());
             }
@@ -207,6 +363,39 @@ public class ChatService {
 
         // 去重：按 content 去重，保留顺序
         return deduplicateItems(allItems);
+    }
+
+    /**
+     * 动态文档名匹配：查询文本（含上下文扩展）命中知识库 sourceName 时精确检索该文档。
+     * sourceName 列表完全来自知识库元数据，替代原先写死的项目名检索。
+     */
+    private List<KnowledgeSearchItem> searchMentionedSources(String query) {
+        List<KnowledgeSearchItem> items = new ArrayList<>();
+        String normalizedQuery = query.toLowerCase();
+        for (String sourceName : knowledgeBaseService.sourceNames()) {
+            if (matchesSourceName(normalizedQuery, sourceName)) {
+                items.addAll(knowledgeBaseService.searchBySourceName(sourceName));
+            }
+        }
+        return items;
+    }
+
+    private boolean matchesSourceName(String normalizedQuery, String sourceName) {
+        String normalizedName = sourceName.toLowerCase();
+        if (normalizedName.isEmpty()) {
+            return false;
+        }
+        // 完整文档名（含中文名）被提及时命中
+        if (normalizedQuery.contains(normalizedName)) {
+            return true;
+        }
+        // 名称中的 ASCII 词干（如 "fundpilot"、"sec-sonar"）被提及时也算命中
+        for (String stem : normalizedName.split("[^a-z0-9]+")) {
+            if (stem.length() >= 3 && normalizedQuery.contains(stem)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -237,13 +426,12 @@ public class ChatService {
             return QuestionType.GREETING;
         }
 
-        // 项目类
+        // 项目类（仅用通用词判断，项目专属名词不硬编码进分类逻辑）
+        String lowerMsg = msg.toLowerCase();
         if (msg.contains("项目") || msg.contains("作品") || msg.contains("系统")
                 || msg.contains("平台") || msg.contains("应用") || msg.contains("开发过")
-                || msg.contains("agent") || msg.contains("rag") || msg.contains("智能体")
-                || msg.contains("基金") || msg.contains("漏洞") || msg.contains("扫描")
-                || msg.contains("车库") || msg.contains("车辆") || msg.contains("博客")
-                || msg.contains("resume") || msg.contains("fundpilot") || msg.contains("sec-sonar")) {
+                || msg.contains("智能体")
+                || lowerMsg.contains("agent") || lowerMsg.contains("rag")) {
             return QuestionType.PROJECT;
         }
 
@@ -323,8 +511,7 @@ public class ChatService {
         if (msg.contains("介绍自己") || msg.contains("自我介绍") || msg.contains("你是谁")) {
             return QuestionType.SELF_INTRODUCTION;
         }
-        if (msg.contains("项目") || msg.contains("作品") || msg.contains("系统") || msg.contains("agent")
-                || msg.contains("rag") || msg.contains("基金") || msg.contains("车库")) {
+        if (msg.contains("项目") || msg.contains("作品") || msg.contains("系统")) {
             return QuestionType.PROJECT;
         }
         if (msg.contains("技术") || msg.contains("框架") || msg.contains("spring") || msg.contains("java")
@@ -382,40 +569,11 @@ public class ChatService {
 
     /**
      * 从文本中提取有价值的检索关键词（项目名、技术栈、核心概念）。
-     * 过滤掉虚词和低信息量词汇。
+     * 基于知识库词频（IDF）动态抽取：越有区分度的词权重越高，
+     * 不再维护硬编码关键词表，知识库内容变化时自动适应。
      */
     private List<String> extractKeywords(String text) {
-        List<String> keywords = new ArrayList<>();
-        // 已知的高价值关键词（项目名 + 技术栈）
-        String[] knownTerms = {
-                "ResumeAgent", "FundPilot", "Sec-Sonar", "GazeForge", "MentalBlog",
-                "Spring Boot", "Spring Cloud", "Spring AI", "MyBatis-Plus",
-                "Vue", "Redis", "MySQL", "Kafka", "Docker", "Nginx", "Nmap",
-                "RAG", "Agent", "Tool Calling", "SSE", "Prompt",
-                "交易系统", "支付网关", "车库管理", "漏洞扫描", "基金分析",
-                "面试", "岗位匹配", "技能分析", "知识库", "向量"
-        };
-        String lower = text.toLowerCase();
-        for (String term : knownTerms) {
-            if (lower.contains(term.toLowerCase())) {
-                keywords.add(term);
-            }
-        }
-        return keywords;
-    }
-
-    private List<String> splitIntoChunks(String reply) {
-        List<String> chunks = new ArrayList<>();
-        String[] lines = reply.split("\n");
-        for (String line : lines) {
-            if (!line.isBlank()) {
-                chunks.add(line);
-            }
-        }
-        if (chunks.isEmpty()) {
-            chunks.add(reply);
-        }
-        return chunks;
+        return knowledgeBaseService.extractKeywords(text, 6);
     }
 }
 

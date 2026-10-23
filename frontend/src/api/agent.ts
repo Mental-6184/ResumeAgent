@@ -7,7 +7,11 @@ import type {
   SkillAnalysisResponse,
   InterviewAnswerRequest,
   InterviewAnswerResponse,
-  TechQuoteResponse
+  TechQuoteResponse,
+  MatchReportResponse,
+  InterviewReviewRequest,
+  InterviewReviewResponse,
+  InterviewReviewSummary
 } from '../types'
 
 export async function analyzeJob(request: JobAnalyzeRequest) {
@@ -33,5 +37,34 @@ export async function generateInterviewAnswer(request: InterviewAnswerRequest) {
 export async function getTechQuote() {
   const response = await http.get<TechQuoteResponse>('/agent/tech-quote')
   return response.data
+}
+
+// ===== 深度匹配报告 =====
+
+export async function getMatchReport(request: JobAnalyzeRequest): Promise<MatchReportResponse> {
+  const res = await http.post<MatchReportResponse>('/agent/match-report', request, { timeout: 120000 })
+  return res.data
+}
+
+// ===== 模拟面试复盘 =====
+
+export async function createReview(request: InterviewReviewRequest): Promise<InterviewReviewResponse> {
+  const res = await http.post<InterviewReviewResponse>('/agent/interview-reviews', request, { timeout: 120000 })
+  return res.data
+}
+
+export async function listReviews(): Promise<InterviewReviewSummary[]> {
+  const res = await http.get<InterviewReviewSummary[]>('/agent/interview-reviews')
+  return res.data
+}
+
+export async function getReview(id: string): Promise<InterviewReviewResponse> {
+  const res = await http.get<InterviewReviewResponse>(`/agent/interview-reviews/${id}`)
+  return res.data
+}
+
+export async function deleteReview(id: string): Promise<{ success: boolean }> {
+  const res = await http.delete<{ success: boolean }>(`/agent/interview-reviews/${id}`)
+  return res.data
 }
 

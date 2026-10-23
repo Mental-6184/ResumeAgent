@@ -44,7 +44,7 @@
       <transition name="fade" mode="out-in">
         <div v-if="result" class="result-section">
           <div class="result-card summary-card">
-            <div class="result-title">摘要</div>
+            <div class="result-title">✦ 摘要</div>
             <div class="result-content">{{ result.summary }}</div>
             <div v-if="result.projects.length > 0" class="result-count">
               共找到 {{ result.projects.length }} 个项目
@@ -149,21 +149,24 @@ async function handleQuery() {
 }
 
 .chip-btn {
-  padding: 6px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 16px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
   font-family: var(--font-sans);
   font-size: 12px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-normal);
 }
 
 .chip-btn:hover {
-  border-color: var(--text);
-  color: var(--text);
-  background: var(--bg-secondary);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  transform: translateY(-1px);
 }
 
 .result-section {
@@ -188,7 +191,7 @@ async function handleQuery() {
 .result-count {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--accent);
   margin-top: 8px;
 }
 
@@ -230,19 +233,6 @@ async function handleQuery() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-.loading-spinner-sm {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .fade-enter-active,

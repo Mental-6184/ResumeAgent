@@ -34,7 +34,17 @@ public class PromptBuilder {
                 你就是简历的主人，正在接受面试官的提问。你不是 AI，不是助手——你就是这个人本身。
 
                 ═══════════════════════════════════════════════════
-                ## ⚠️ 最高优先级：防幻觉规则（违反即失败）
+                ## ⚠️ 最高优先级：以用户输入为准（违反即失败）
+
+                你的所有回答必须围绕「个人资料」展开，尤其是「用户档案」（用户亲手填写的网申信息和上传的简历）。
+                （「个人资料」= 下文「用户档案」+「补充资料」两节的合称；两者冲突时，永远以「用户档案」为准。）
+
+                **事实来源优先级**：用户档案 > 简历/项目文档检索片段 > 你的常识（仅用于组织表达，不得作为经历来源）。
+
+                **禁止固定话术**：
+                1. 禁止套用任何预设的自我介绍/项目介绍模板，一切内容以用户档案和个人资料的原始表述为事实依据
+                2. 禁止输出与用户输入无关的套话（例如让用户"去上传资料"、泛泛的面试技巧说教）
+                3. 禁止说出与用户档案矛盾的信息
 
                 你只能谈论「个人资料」部分明确提到的内容。
 
@@ -96,11 +106,10 @@ public class PromptBuilder {
 
                 ### 情况一：列举类问题（"你做过哪些项目？"、"介绍一下你的项目经历"等）
                 回答结构：
-                1. **开场**：一句话概括项目经历（如"我参与过多个项目，其中最具代表性的有两个"）
-                2. **重点讲述（2个）**：用 3-4 句话详细介绍每个重点项目
-                   - **FundPilot-AI 基金智能分析平台**：基于多 Agent AI 架构的基金投资智能分析平台，涉及 RAG、Agent、实时数据处理
-                   - **ResumeAgent 简历智能助手**：基于 RAG 的智能问答系统，不是简历生成工具，展示 AI 工程化能力
-                3. **简要提及（4-5个）**：每个项目用 1 句话概括，说出具体项目名称和技术栈
+                1. **开场**：一句话概括项目经历（如"我参与过几个项目，其中比较有代表性的是……"）
+                2. **重点讲述**：挑「个人资料」中描述最详细、含金量最高的 1-2 个项目，各用 3-4 句话展开
+                   - 项目名称、定位、技术栈严格照「个人资料」的原始描述，不得套用任何预设模板
+                3. **简要提及**：其余项目每个用 1 句话概括，说出资料中记载的项目名称和技术栈
                    - 示例："除此之外，我还做过XXX项目，主要用到了XXX技术"
                 4. **不能泛泛而谈**：不能只说"参与过多个项目"，必须说出具体项目名称
 
@@ -114,9 +123,8 @@ public class PromptBuilder {
                 ### 通用要求
                 - **不能直接照搬文档**：要用自己的话重新组织，体现思考和理解，而不是背诵
                 - **要有层次感**：重点项目详细讲，其他项目带过，不要平铺直叙
-                - **要准确描述项目**：
-                  * FundPilot-AI 是基金投资智能分析平台，不是简单的数据查询工具
-                  * ResumeAgent 是基于 RAG 的智能问答系统，不是简历生成工具
+                - **要准确描述项目**：项目定位、功能、技术栈以「个人资料」中的原始描述为准，
+                  不得套用任何预设的项目介绍话术
                 - **要有量化成果**：必须包含具体的性能指标（如响应时间、准确率、数据处理量等）
 
                 要求：
@@ -146,6 +154,7 @@ public class PromptBuilder {
 
                 ## 禁止行为
                 - 不能暴露 AI 身份（"根据知识库"、"我是 AI"等）
+                - 不能使用占位符编造（如"[你的姓名]"、"XX大学"、"XX公司"、"XX项目"），资料里没有就是没有
                 - 不能主动说手机号、邮箱（除非面试官问）
                 - 不能把某个项目的细节说成自己的通用习惯
                 - 介绍项目要挑含金量高的，不要提简单 CRUD 或小游戏
@@ -178,31 +187,60 @@ public class PromptBuilder {
                     "或『这个方向我还在学习中，目前没有深入的项目经验可以分享。』）";
         }
 
-        // 按 sourceType 分组展示，让 LLM 更好理解上下文结构
+        // 用户档案（用户亲手填写/上传）与其它资料分区展示，档案拥有绝对优先级
+        List<KnowledgeSearchItem> profileItems = new java.util.ArrayList<>();
         Map<String, List<KnowledgeSearchItem>> grouped = new java.util.LinkedHashMap<>();
         for (KnowledgeSearchItem item : contexts) {
-            grouped.computeIfAbsent(item.sourceType(), k -> new java.util.ArrayList<>()).add(item);
+            if (KnowledgeBaseService.PROFILE_SOURCE_NAME.equals(item.sourceName())) {
+                profileItems.add(item);
+            } else {
+                grouped.computeIfAbsent(item.sourceType(), k -> new java.util.ArrayList<>()).add(item);
+            }
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("\n\n## 我的个人资料（只能基于以下内容回答，不能编造）\n\n");
 
-        for (Map.Entry<String, List<KnowledgeSearchItem>> entry : grouped.entrySet()) {
-            String typeLabel = switch (entry.getKey()) {
-                case "resume" -> "基本信息";
-                case "project" -> "项目经历";
-                case "blog" -> "技术博客";
-                case "readme" -> "项目说明";
-                default -> "其他资料";
-            };
-            sb.append("### ").append(typeLabel).append("\n");
-            for (KnowledgeSearchItem item : entry.getValue()) {
+        if (!profileItems.isEmpty()) {
+            sb.append("\n\n## 用户档案（最高优先级·冲突时一律以本节为准）\n");
+            sb.append("以下内容由用户本人亲手填写/上传，是你唯一的身份事实来源：\n");
+            sb.append("- 姓名、学校、学历、专业、技能、经历等所有身份信息**只能**取自本节\n");
+            sb.append("- 下方其它资料与本节冲突时（例如出现另一个人的姓名/学校/经历），**一律忽略其它资料中的冲突部分**，只用本节的身份信息作答\n");
+            sb.append("- 若**对话历史**中出现与本节不一致的身份信息（例如用户切换过档案模板），**同样以本节为准**，"
+                    + "从下一次回答开始自然地以本节身份作答，不要沿用历史中的旧身份\n");
+            sb.append("- 其它资料仅可用于补充与本节不冲突的项目细节、技术细节\n\n");
+            for (KnowledgeSearchItem item : profileItems) {
                 sb.append("- ").append(item.content()).append("\n");
             }
-            sb.append("\n");
+            sb.append('\n');
+        } else {
+            sb.append("\n\n## ⚠️ 没有用户档案（严格约束）\n");
+            sb.append("用户还没有填写个人档案，你**不知道**自己是谁：\n");
+            sb.append("- **禁止自我介绍**，禁止说出或暗示任何姓名、学校、公司、项目\n");
+            sb.append("- **禁止使用占位符编造**（如『[你的姓名]』『XX大学』『XX项目』这类模板化内容），出现即失败\n");
+            sb.append("- 被问候时只做简短、礼貌的回应，引导对方提问即可；被问经历时坦诚说目前没有可展开的资料\n\n");
         }
 
-        return base + phaseHint + sb.toString();
+        if (!grouped.isEmpty()) {
+            sb.append("\n## 补充资料（仅在不与用户档案冲突时使用，不能编造）\n\n");
+            for (Map.Entry<String, List<KnowledgeSearchItem>> entry : grouped.entrySet()) {
+                String typeLabel = switch (entry.getKey()) {
+                    case "resume" -> "个人文档";
+                    case "project" -> "项目经历";
+                    case "blog" -> "技术博客";
+                    case "readme" -> "项目说明";
+                    default -> "其他资料";
+                };
+                sb.append("### ").append(typeLabel).append("\n");
+                for (KnowledgeSearchItem item : entry.getValue()) {
+                    sb.append("- ").append(item.content()).append("\n");
+                }
+                sb.append("\n");
+            }
+        }
+
+        return base + phaseHint + sb.toString()
+                + "\n\n## 回答长度要求\n回答要充分展开、包含具体细节（技术方案、数据、成果），一般不少于 200 字；"
+                + "流式输出开始后无法重写，务必一次给出完整、详实的回答。";
     }
 
     /**
@@ -272,16 +310,22 @@ public class PromptBuilder {
     }
 
     /**
+     * 无用户档案时的问候式回答：简短、礼貌、零编造（不调用 LLM 的确定性回复）。
+     */
+    public String buildGreetingAnswer() {
+        return "您好！很高兴有机会交流。请问您想从哪个方面开始了解我？";
+    }
+
+    /**
      * 知识库无相关内容或 LLM 不可用时的降级回答，以候选人身份表述。
      * 不暴露"知识库"等 AI 身份信息。
      */
     public String buildFallbackChatAnswer(String question, List<KnowledgeSearchItem> contexts) {
         if (contexts.isEmpty()) {
-            return "这块我暂时没有太多可以展开的，您想了解其他方面吗？\n\n"
-                    + "您可以在「知识库」页面上传简历、项目文档等资料，上传后我就能基于真实经历来回答了。";
+            return "这块我暂时没有太多可以展开的，您想了解其他方面吗？";
         }
         StringBuilder builder = new StringBuilder();
-        builder.append("关于这个问题，结合我的经历来说：\n\n");
+        builder.append("关于这个问题，结合我填写的资料来说：\n\n");
         for (int index = 0; index < Math.min(contexts.size(), 3); index++) {
             KnowledgeSearchItem item = contexts.get(index);
             builder.append("- ").append(item.content()).append('\n');

@@ -47,13 +47,13 @@
       <transition name="fade" mode="out-in">
         <div v-if="result" class="result-section">
           <div class="result-card answer-card">
-            <div class="result-title">参考回答</div>
+            <div class="result-title">✦ 参考回答</div>
             <div class="result-content answer-content" v-html="formatText(result.answer)"></div>
           </div>
 
           <div class="result-columns">
             <div class="result-card">
-              <div class="result-title">回答要点</div>
+              <div class="result-title">◈ 回答要点</div>
               <div class="result-content">
                 <ul>
                   <li v-for="point in result.keyPoints" :key="point">{{ point }}</li>
@@ -62,7 +62,7 @@
             </div>
 
             <div class="result-card">
-              <div class="result-title">回答技巧</div>
+              <div class="result-title">◇ 回答技巧</div>
               <div class="result-content">
                 <ul>
                   <li v-for="tip in result.tips" :key="tip">{{ tip }}</li>
@@ -156,21 +156,24 @@ async function handleGenerate() {
 }
 
 .chip-btn {
-  padding: 6px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 16px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
   font-family: var(--font-sans);
   font-size: 12px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-normal);
 }
 
 .chip-btn:hover {
-  border-color: var(--text);
-  color: var(--text);
-  background: var(--bg-secondary);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  transform: translateY(-1px);
 }
 
 .result-section {
@@ -208,19 +211,6 @@ async function handleGenerate() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-.loading-spinner-sm {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .fade-enter-active,

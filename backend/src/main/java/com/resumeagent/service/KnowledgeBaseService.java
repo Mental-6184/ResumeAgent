@@ -14,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,7 @@ public class KnowledgeBaseService {
     /** 倒排索引：token → chunk 下标数组，与 chunks 快照同步整体替换 */
     private volatile Map<String, int[]> postings = Map.of();
 
+    @Autowired
     public KnowledgeBaseService(EmbeddingService embeddingService, ResumeAgentProperties properties) {
         this.embeddingService = embeddingService;
         this.properties = properties;

@@ -776,7 +776,7 @@ function handleFeature(panel: string) {
 }
 
 /* ─── Simple workspace home ─── */
-.welcome-container { min-height: 100%; padding: 48px 32px 36px; background: var(--bg); overflow-y: auto; }
+ .welcome-container { min-height: 100%; justify-content: flex-start; padding: 32px 32px 40px; background: var(--bg); overflow-y: auto; }
 .welcome-bg, .bg-grid, .bg-glow, .bg-orb { display: none; }
 .side-panel { display: none; }
 .welcome-content { max-width: 1080px; text-align: left; }

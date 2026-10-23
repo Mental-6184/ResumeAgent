@@ -906,6 +906,82 @@ textarea:focus-visible {
 .btn-ghost { background: #fff !important; border-color: var(--border-strong) !important; }
 .tag, .upload-name, .doc-tag.manual, .degraded-tag.llm { background: var(--accent-soft) !important; color: var(--accent) !important; }
 
+/* ─── Refined product workspace ─── */
+.app-content {
+  background:
+    radial-gradient(circle at 88% -10%, rgba(22, 119, 255, 0.08), transparent 28%),
+    var(--bg);
+}
+
+.panel-header,
+.profile-panel > .panel-header,
+.knowledge-panel > .panel-header,
+.review-panel > .panel-header,
+.workspace-header {
+  position: relative;
+  min-height: 64px;
+  padding: 20px 32px 20px 38px !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: 0 1px 0 rgba(31, 41, 55, 0.03), 0 8px 24px rgba(31, 41, 55, 0.03);
+  letter-spacing: -0.01em;
+}
+
+.panel-header::before,
+.profile-panel > .panel-header::before,
+.knowledge-panel > .panel-header::before,
+.review-panel > .panel-header::before,
+.workspace-header::before {
+  content: '';
+  position: absolute;
+  left: 22px;
+  top: 21px;
+  width: 3px;
+  height: 22px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--accent), #69b1ff);
+}
+
+.panel-body,
+.profile-panel > .panel-body,
+.knowledge-panel > .panel-body,
+.review-panel > .panel-body {
+  background: linear-gradient(180deg, rgba(248, 250, 253, 0.92), rgba(243, 246, 250, 0.72));
+}
+
+.form-section {
+  padding: 16px 18px 18px;
+  margin-bottom: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(220, 227, 237, 0.9);
+  border-radius: 12px;
+  box-shadow: 0 3px 12px rgba(31, 41, 55, 0.025);
+}
+
+.form-label {
+  color: #344054;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.form-input,
+.form-textarea {
+  border-radius: 9px;
+  background: #fff !important;
+  transition: border-color var(--transition-normal), box-shadow var(--transition-normal), transform var(--transition-normal);
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 5px 14px rgba(22, 119, 255, 0.08) !important;
+}
+
+.result-card,
+.project-item {
+  border-radius: 12px !important;
+}
+
 @media (max-width: 720px) {
   .panel-header,
   .profile-panel > .panel-header,
